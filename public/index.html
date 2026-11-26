@@ -1422,19 +1422,24 @@
 
         el.eyeTimerValue.textContent = formatDuration(state.eyeWorkRemainingMs);
         const scheduleLabel = `Tiap ${state.eyeWorkMinutes} mnt · istirahat ${state.eyeRestSeconds} dtk`;
+        const isAtFullTime = state.eyeWorkRemainingMs >= state.eyeWorkMinutes * 60 * 1000;
 
         if (state.eyeTimerPaused) {
-          el.eyeTimerDot.className = "h-1.5 w-1.5 rounded-full bg-amber-400";
-          el.eyeTimerSub.textContent = `Dijeda · ${scheduleLabel}`;
-          el.btnPauseEyeTimer.textContent = "Lanjut";
+          el.eyeTimerDot.className = isAtFullTime
+            ? "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]"
+            : "h-1.5 w-1.5 rounded-full bg-amber-400";
+          el.eyeTimerSub.textContent = isAtFullTime
+            ? `Siap · ${scheduleLabel}`
+            : `Dijeda · ${scheduleLabel}`;
+          el.btnPauseEyeTimer.textContent = isAtFullTime ? "Mulai" : "Lanjut";
           el.btnPauseEyeTimer.className =
-            "rounded-lg bg-[#192641] px-2.5 py-1 text-xs font-medium text-[#F8F9FA] transition hover:bg-[#243456]";
+            "inline-flex items-center gap-1 rounded-lg bg-[#192641] px-2.5 py-1 text-xs font-medium text-[#F8F9FA] transition hover:bg-[#243456]";
           return;
         }
 
         el.btnPauseEyeTimer.textContent = "Jeda";
         el.btnPauseEyeTimer.className =
-          "rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-2.5 py-1 text-xs font-medium text-[#192641] transition hover:border-[#A1BDD0] hover:bg-white";
+          "inline-flex items-center gap-1 rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-2.5 py-1 text-xs font-medium text-[#192641] transition hover:border-[#A1BDD0] hover:bg-white";
 
         if (state.isRunning) {
           el.eyeTimerDot.className = "h-1.5 w-1.5 rounded-full bg-[#192641]";
@@ -2619,28 +2624,29 @@
 
       el.btnPauseEyeTimer.addEventListener("click", () => {
         if (state.eyeRestActive) return;
+        const wasFull = state.eyeWorkRemainingMs >= state.eyeWorkMinutes * 60 * 1000;
         state.eyeTimerPaused = !state.eyeTimerPaused;
-        if (!state.eyeTimerPaused && state.isRunning) {
+        if (!state.eyeTimerPaused) {
           startEyeTimerLoop();
         }
         updateEyeTimerUI();
         showToast(
           state.eyeTimerPaused
             ? "Waktu istirahat mata dihentikan sementara."
-            : "Waktu istirahat mata dilanjutkan."
+            : wasFull
+              ? "Hitung mundur istirahat mata dimulai."
+              : "Waktu istirahat mata dilanjutkan."
         );
       });
 
       el.btnResetEyeTimer.addEventListener("click", () => {
         if (state.eyeRestActive) {
           finishEyeRest(true);
-          return;
         }
-        state.eyeTimerPaused = false;
+        state.eyeTimerPaused = true;
         state.eyeWorkRemainingMs = state.eyeWorkMinutes * 60 * 1000;
-        if (state.isRunning) startEyeTimerLoop();
         updateEyeTimerUI();
-        showToast(`Waktu istirahat mata direset ke ${formatDuration(state.eyeWorkRemainingMs)}.`);
+        showToast(`Waktu direset ke ${formatDuration(state.eyeWorkRemainingMs)}. Klik Mulai untuk menjalankan.`);
       });
 
       el.btnSkipEyeBreak.addEventListener("click", () => finishEyeRest(true));
@@ -2676,6 +2682,7 @@
         state.scoreHistory = [];
         state.lastTrendSampleTs = 0;
         state.eyeBreaksCompleted = 0;
+        state.eyeTimerPaused = true;
         state.eyeWorkRemainingMs = state.eyeWorkMinutes * 60 * 1000;
         el.trendAvgLabel.textContent = "Rata-rata: --";
         renderTrendChart(el.liveTrendSvg, [], false);
