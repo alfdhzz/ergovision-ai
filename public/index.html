@@ -1028,10 +1028,15 @@
       const IDEAL_SIDE_TORSO_MAX = 14.0;
       const IDEAL_SIDE_CHIN_DROP_MAX = 16.0;
       const DEFAULT_SIDE_FACE_RATIO = 0.095;
-      const LANDMARK_VIS_THRESHOLD = 0.40;
+      const LANDMARK_VIS_THRESHOLD = 0.42;
       const AI_INTERVAL_MS = 70;
+      const MAX_MISSED_FRAMES = 5;
+      const AUTO_SWITCH_STREAK = 4;
+      const SIDE_SWITCH_STREAK = 5;
       const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
       const MEDIAPIPE_MODEL_URL =
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+      const MEDIAPIPE_MODEL_LITE_URL =
         "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
       const CHIME_HOLD_MS = 3000;
       const DEFAULT_EYE_WORK_MIN = 20;      // Default 20 minutes
@@ -1063,6 +1068,14 @@
         baselineSideFace: null,
         viewMode: "auto",           // "auto" | "front" | "side"
         detectedViewMode: "front",  // "front" | "side"
+        // Side-view tracking stabilization state
+        lockedSide: null,           // "left" | "right" | null
+        sideSwitchStreak: 0,
+        autoModeCandidate: null,    // "front" | "side" | null
+        autoModeStreak: 0,
+        missedFrames: 0,
+        sideKpFilter: null,         // { ear, shoulder, nose, hip, faceDir }
+        emaMetrics: null,           // { mode, score }
         lastMetrics: null,
         healthyMs: 0,
         poorMs: 0,
@@ -1867,9 +1880,9 @@
           return;
         }
 
-        const alpha = 1 - Math.exp(-18 * dtSec);
         const t = state.targetPose;
         const isSidePose = t.mode === "side";
+        const alpha = 1 - Math.exp(-(isSidePose ? 10 : 18) * dtSec);
         const prev = state.smoothPose && state.smoothPose.mode === (isSidePose ? "side" : "front")
           ? state.smoothPose
           : null;
@@ -2075,6 +2088,16 @@
         drawJointNode(ctx, nx, ny, statusHex, 5.2);
       }
 
+      function resetTrackingStability() {
+        state.lockedSide = null;
+        state.sideSwitchStreak = 0;
+        state.autoModeCandidate = null;
+        state.autoModeStreak = 0;
+        state.missedFrames = 0;
+        state.sideKpFilter = null;
+        state.emaMetrics = null;
+      }
+
       function applyAnalysisResult(data) {
         const now = performance.now();
         state.aiTimestamps.push(now);
@@ -2083,6 +2106,16 @@
         state.lastTickTs = now;
 
         if (!data.detected) {
+          // Grace period: hold last valid pose briefly to prevent frame-drop flicker
+          if (state.targetPose && state.missedFrames < MAX_MISSED_FRAMES) {
+            state.missedFrames += 1;
+            return;
+          }
+          state.missedFrames = MAX_MISSED_FRAMES;
+          state.sideKpFilter = null;
+          state.emaMetrics = null;
+          state.lockedSide = null;
+          state.sideSwitchStreak = 0;
           state.targetPose = null;
           state.lastMetrics = null;
           state.badPostureStartTs = null;
@@ -2113,6 +2146,8 @@
           renderDiagnosis(false, "undetected", data.issues || []);
           return;
         }
+
+        state.missedFrames = 0;
 
         state.targetPose = data.keypoints || null;
         state.poseStatus = data.status || "ideal";
@@ -2260,29 +2295,57 @@
 
         state.modelPromise = (async () => {
           const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-          try {
-            state.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-              baseOptions: { modelAssetPath: MEDIAPIPE_MODEL_URL, delegate: "GPU" },
-              runningMode: "VIDEO",
-              numPoses: 1,
-              minPoseDetectionConfidence: 0.4,
-              minPosePresenceConfidence: 0.4,
-              minTrackingConfidence: 0.4,
-            });
-          } catch (_) {
-            state.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-              baseOptions: { modelAssetPath: MEDIAPIPE_MODEL_URL, delegate: "CPU" },
-              runningMode: "VIDEO",
-              numPoses: 1,
-              minPoseDetectionConfidence: 0.4,
-              minPosePresenceConfidence: 0.4,
-              minTrackingConfidence: 0.4,
-            });
+          const attempts = [
+            { url: MEDIAPIPE_MODEL_URL, delegate: "GPU" },
+            { url: MEDIAPIPE_MODEL_URL, delegate: "CPU" },
+            { url: MEDIAPIPE_MODEL_LITE_URL, delegate: "GPU" },
+            { url: MEDIAPIPE_MODEL_LITE_URL, delegate: "CPU" },
+          ];
+          let lastErr = null;
+          for (const cfg of attempts) {
+            try {
+              state.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: cfg.url, delegate: cfg.delegate },
+                runningMode: "VIDEO",
+                numPoses: 1,
+                minPoseDetectionConfidence: 0.5,
+                minPosePresenceConfidence: 0.5,
+                minTrackingConfidence: 0.55,
+              });
+              return state.poseLandmarker;
+            } catch (err) {
+              lastErr = err;
+            }
           }
-          return state.poseLandmarker;
+          throw lastErr || new Error("Gagal memuat model MediaPipe Pose.");
         })();
 
         return state.modelPromise;
+      }
+
+      function inFrameBounds(lm, margin = 0.02) {
+        return (
+          lm &&
+          typeof lm.x === "number" &&
+          typeof lm.y === "number" &&
+          lm.x >= margin &&
+          lm.x <= 1 - margin &&
+          lm.y >= margin &&
+          lm.y <= 1 - margin
+        );
+      }
+
+      function smoothSidePt(prevPt, rawPt) {
+        if (!rawPt) return null;
+        if (!prevPt) return [rawPt[0], rawPt[1]];
+        const dx = rawPt[0] - prevPt[0];
+        const dy = rawPt[1] - prevPt[1];
+        const dist = Math.hypot(dx, dy);
+        // Micro-jitter dead-zone so dots stay rock-solid while sitting still
+        if (dist < 0.0035) return prevPt;
+        // Dampen sudden single-frame outlier spikes; stay responsive on intentional motion
+        const alpha = dist > 0.16 ? 0.16 : dist > 0.045 ? 0.40 : 0.24;
+        return [prevPt[0] + dx * alpha, prevPt[1] + dy * alpha];
       }
 
       function undetectedPayload(mode) {
@@ -2305,35 +2368,95 @@
       function evaluateSideLandmarks(landmarks, frameW, frameH) {
         // MediaPipe 33-landmark indices: 0=nose, 7=left_ear, 8=right_ear, 11=left_shoulder, 12=right_shoulder, 23=left_hip, 24=right_hip
         const vis = (lm) => (typeof lm?.visibility === "number" ? lm.visibility : 1.0);
-        const leftScore = vis(landmarks[11]) + vis(landmarks[7]);
-        const rightScore = vis(landmarks[12]) + vis(landmarks[8]);
-        const useLeft = leftScore >= rightScore;
+        const depthBonus = (lm) => (typeof lm?.z === "number" ? Math.max(-0.6, Math.min(0.6, -lm.z)) * 0.65 : 0);
 
+        const leftScore = vis(landmarks[11]) + vis(landmarks[7]) + depthBonus(landmarks[11]) + depthBonus(landmarks[7]);
+        const rightScore = vis(landmarks[12]) + vis(landmarks[8]) + depthBonus(landmarks[12]) + depthBonus(landmarks[8]);
+
+        // Sticky side lock with hysteresis so skeleton never flips left <-> right frame-to-frame
+        let candidateSide = leftScore >= rightScore ? "left" : "right";
+        if (!state.lockedSide) {
+          state.lockedSide = candidateSide;
+          state.sideSwitchStreak = 0;
+        } else if (candidateSide !== state.lockedSide) {
+          const curShVis = state.lockedSide === "left" ? vis(landmarks[11]) : vis(landmarks[12]);
+          const scoreGap = Math.abs(leftScore - rightScore);
+          if (scoreGap > 0.22 || curShVis < 0.42) {
+            state.sideSwitchStreak += 1;
+            if (state.sideSwitchStreak >= SIDE_SWITCH_STREAK) {
+              state.lockedSide = candidateSide;
+              state.sideSwitchStreak = 0;
+              state.sideKpFilter = null;
+            }
+          } else {
+            state.sideSwitchStreak = 0;
+          }
+        } else {
+          state.sideSwitchStreak = 0;
+        }
+
+        const useLeft = state.lockedSide === "left";
         const lmSh = useLeft ? landmarks[11] : landmarks[12];
         const lmEar = useLeft ? landmarks[7] : landmarks[8];
         const lmHip = useLeft ? landmarks[23] : landmarks[24];
         const lmNose = landmarks[0];
 
-        if (!lmSh || vis(lmSh) < 0.35 || (vis(lmEar) < 0.35 && vis(lmNose) < 0.35)) {
+        const shOk = inFrameBounds(lmSh, 0.02) && vis(lmSh) >= 0.48;
+        const earOk = inFrameBounds(lmEar, 0.02) && vis(lmEar) >= 0.42;
+        const noseOk = inFrameBounds(lmNose, 0.02) && vis(lmNose) >= 0.42;
+        if (!shOk || (!earOk && !noseOk)) {
           return undetectedPayload("side");
         }
 
-        const shPx = [lmSh.x * frameW, lmSh.y * frameH];
-        const nosePx = [lmNose.x * frameW, lmNose.y * frameH];
-        const earLm = vis(lmEar) >= 0.35 ? lmEar : lmNose;
-        const earPx = [earLm.x * frameW, earLm.y * frameH];
+        const rawEarLm = earOk ? lmEar : lmNose;
+        const rawNoseLm = noseOk ? lmNose : rawEarLm;
 
-        let hipLm = null;
-        let hipPx = null;
-        if (lmHip && vis(lmHip) >= 0.35 && lmHip.y * frameH > shPx[1] + 20) {
-          hipLm = lmHip;
-          hipPx = [lmHip.x * frameW, lmHip.y * frameH];
+        // Sanity check: ear/head must be above shoulder (rejects inverted/exploded detections)
+        if (rawEarLm.y >= lmSh.y - 0.03) {
+          return undetectedPayload("side");
         }
 
-        let faceDir = nosePx[0] - earPx[0] >= 0 ? 1 : -1;
-        if (Math.abs(nosePx[0] - earPx[0]) < 4) {
+        // Strict in-frame hip validation so phantom off-screen hips never shoot lines to screen edges
+        let rawHipNorm = null;
+        if (
+          lmHip &&
+          vis(lmHip) >= 0.68 &&
+          lmHip.x >= 0.05 &&
+          lmHip.x <= 0.95 &&
+          lmHip.y <= 0.92 &&
+          lmHip.y > lmSh.y + 0.12
+        ) {
+          rawHipNorm = [lmHip.x, lmHip.y];
+        }
+
+        // Apply coordinate EMA + dead-zone + outlier dampening
+        const prevF = state.sideKpFilter;
+        const shNorm = smoothSidePt(prevF?.shoulder, [lmSh.x, lmSh.y]);
+        const earNorm = smoothSidePt(prevF?.ear, [rawEarLm.x, rawEarLm.y]);
+        const noseNorm = smoothSidePt(prevF?.nose, [rawNoseLm.x, rawNoseLm.y]);
+        const hipNorm = rawHipNorm ? smoothSidePt(prevF?.hip, rawHipNorm) : null;
+
+        const shPx = [shNorm[0] * frameW, shNorm[1] * frameH];
+        const earPx = [earNorm[0] * frameW, earNorm[1] * frameH];
+        const nosePx = [noseNorm[0] * frameW, noseNorm[1] * frameH];
+        const hipPx = hipNorm ? [hipNorm[0] * frameW, hipNorm[1] * frameH] : null;
+
+        // Stabilized facing direction (+1 right, -1 left)
+        let faceDir = prevF?.faceDir ?? 1;
+        const noseEarDx = nosePx[0] - earPx[0];
+        if (Math.abs(noseEarDx) >= Math.max(6, frameW * 0.014)) {
+          faceDir = noseEarDx >= 0 ? 1 : -1;
+        } else if (Math.abs(nosePx[0] - shPx[0]) >= Math.max(8, frameW * 0.02)) {
           faceDir = nosePx[0] - shPx[0] >= 0 ? 1 : -1;
         }
+
+        state.sideKpFilter = {
+          ear: earNorm,
+          shoulder: shNorm,
+          nose: noseNorm,
+          hip: hipNorm,
+          faceDir,
+        };
 
         // 1. Forward Head / Neck Angle from vertical plumb line
         const dyNeck = Math.max(shPx[1] - earPx[1], 1);
@@ -2387,12 +2510,17 @@
         const tooClose = faceIncrease > FACE_INCREASE_THRESHOLD;
         const distanceStatus = tooClose ? "Terlalu Dekat" : faceIncrease > 0.12 ? "Agak Dekat" : "Aman";
 
-        // 4. Score (0 - 100)
+        // 4. Score (0 - 100) with gentle EMA smoothing
         const neckPenalty = !neckForward ? Math.max(0, (neckAngle - 10) * 0.8) : 20 + Math.min(30, neckExcess * 2.2);
         const torsoPenalty = !torsoSlouched ? Math.max(0, (torsoAngle - 9) * 0.8) : 16 + Math.min(26, (torsoAngle - torsoLimit) * 2.2);
         const facePenalty = !tooClose ? Math.max(0, (faceIncrease - 0.12) * 30) : 16 + Math.min(24, (faceIncrease - FACE_INCREASE_THRESHOLD) * 70);
 
-        const score = Math.round(Math.max(0, Math.min(100, 100 - (neckPenalty + torsoPenalty + facePenalty))));
+        const rawScore = Math.max(0, Math.min(100, 100 - (neckPenalty + torsoPenalty + facePenalty)));
+        const prevEmaScore = state.emaMetrics?.mode === "side" ? state.emaMetrics.score : rawScore;
+        const smoothScore = prevEmaScore + (rawScore - prevEmaScore) * 0.28;
+        state.emaMetrics = { mode: "side", score: smoothScore };
+
+        const score = Math.round(smoothScore);
         const status = score >= 80 ? "ideal" : score >= 55 ? "warning" : "poor";
         const statusLabel =
           score >= 80 ? "Postur Bagus & Sehat" : score >= 55 ? "Perlu Diperbaiki Sedikit" : "Postur Kurang Baik";
@@ -2431,10 +2559,10 @@
           view_mode: "side",
           keypoints: {
             mode: "side",
-            ear: [earLm.x, earLm.y],
-            shoulder: [lmSh.x, lmSh.y],
-            nose: [lmNose.x, lmNose.y],
-            hip: hipLm ? [hipLm.x, hipLm.y] : null,
+            ear: earNorm,
+            shoulder: shNorm,
+            nose: noseNorm,
+            hip: hipNorm,
             face_dir: faceDir,
             flags: {
               neck_forward: neckForward,
@@ -2463,7 +2591,7 @@
 
       function evaluateLandmarks(landmarks, frameW, frameH) {
         if (!landmarks || landmarks.length < 13) {
-          return undetectedPayload(state.viewMode === "side" ? "side" : "front");
+          return undetectedPayload(state.viewMode === "side" ? "side" : state.detectedViewMode || "front");
         }
 
         const vis = (lm) => (typeof lm?.visibility === "number" ? lm.visibility : 1.0);
@@ -2473,19 +2601,54 @@
         const lmLeftShoulder = landmarks[11];
         const lmRightShoulder = landmarks[12];
 
-        // Auto or Manual Front vs Side View selection
+        // Auto (Schmitt-trigger hysteresis + debounce) or Manual Front vs Side View selection
         let useSide = state.viewMode === "side";
         if (state.viewMode === "auto") {
-          const bothShOk = vis(lmLeftShoulder) >= LANDMARK_VIS_THRESHOLD && vis(lmRightShoulder) >= LANDMARK_VIS_THRESHOLD;
-          if (!bothShOk && (vis(lmLeftShoulder) >= 0.35 || vis(lmRightShoulder) >= 0.35)) {
-            useSide = true;
+          const bothShOk =
+            inFrameBounds(lmLeftShoulder, 0.02) &&
+            inFrameBounds(lmRightShoulder, 0.02) &&
+            vis(lmLeftShoulder) >= LANDMARK_VIS_THRESHOLD &&
+            vis(lmRightShoulder) >= LANDMARK_VIS_THRESHOLD;
+          const anyShOk =
+            (inFrameBounds(lmLeftShoulder, 0.02) && vis(lmLeftShoulder) >= 0.45) ||
+            (inFrameBounds(lmRightShoulder, 0.02) && vis(lmRightShoulder) >= 0.45);
+
+          let desiredMode = state.detectedViewMode || "front";
+          if (!bothShOk && anyShOk) {
+            desiredMode = "side";
           } else if (bothShOk) {
             const dxSh = Math.abs(lmLeftShoulder.x - lmRightShoulder.x) * frameW;
             const midShY = ((lmLeftShoulder.y + lmRightShoulder.y) / 2) * frameH;
-            const dyHead = Math.max(midShY - lmNose.y * frameH, 20);
-            if (dxSh / dyHead < 0.72) {
-              useSide = true;
+            const dyHead = Math.max(midShY - lmNose.y * frameH, 24);
+            const ratio = dxSh / dyHead;
+            // Schmitt trigger: enter side below 0.60, return to front above 0.88
+            if (desiredMode === "side") {
+              if (ratio > 0.88) desiredMode = "front";
+            } else {
+              if (ratio < 0.60) desiredMode = "side";
             }
+          }
+
+          if (desiredMode !== (state.detectedViewMode || "front")) {
+            if (state.autoModeCandidate === desiredMode) {
+              state.autoModeStreak += 1;
+            } else {
+              state.autoModeCandidate = desiredMode;
+              state.autoModeStreak = 1;
+            }
+            if (state.autoModeStreak >= AUTO_SWITCH_STREAK) {
+              useSide = desiredMode === "side";
+              state.autoModeCandidate = null;
+              state.autoModeStreak = 0;
+              state.sideKpFilter = null;
+              state.emaMetrics = null;
+            } else {
+              useSide = state.detectedViewMode === "side";
+            }
+          } else {
+            state.autoModeCandidate = null;
+            state.autoModeStreak = 0;
+            useSide = desiredMode === "side";
           }
         }
 
@@ -2676,6 +2839,7 @@
           state.lastAiRunTs = 0;
           state.targetPose = null;
           state.smoothPose = null;
+          resetTrackingStability();
           state.renderTimestamps = [];
           state.aiTimestamps = [];
 
@@ -2733,6 +2897,7 @@
 
         state.targetPose = null;
         state.smoothPose = null;
+        resetTrackingStability();
         state.lastMetrics = null;
         state.lastTickTs = null;
         state.badPostureStartTs = null;
@@ -2957,6 +3122,7 @@
           const mode = btn.getAttribute("data-view-mode") || "auto";
           state.viewMode = mode;
           state.smoothPose = null;
+          resetTrackingStability();
           updateViewModeUI();
           const label = mode === "side" ? "Tampak Samping" : mode === "front" ? "Tampak Depan" : "Otomatis (Depan & Samping)";
           showToast(`Mode kamera diatur ke ${label}.`);

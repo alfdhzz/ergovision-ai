@@ -314,21 +314,38 @@ def _analyze_side_profile(
     ear_conf = float(kps_conf[idx_ear]) if len(kps_conf) > idx_ear else 0.0
     nose_conf = float(kps_conf[KP_NOSE])
 
-    if sh_conf < 0.35 or (ear_conf < 0.35 and nose_conf < 0.35):
+    if sh_conf < 0.45 or (ear_conf < 0.40 and nose_conf < 0.40):
         return _undetected_response(frame, include_image=include_image, view_mode="side")
 
     shoulder = (float(kps_xy[idx_sh][0]), float(kps_xy[idx_sh][1]))
     nose = (float(kps_xy[KP_NOSE][0]), float(kps_xy[KP_NOSE][1]))
     ear = (
         (float(kps_xy[idx_ear][0]), float(kps_xy[idx_ear][1]))
-        if ear_conf >= 0.35
+        if ear_conf >= 0.40
         else nose
     )
 
+    def _in_frame(pt: Tuple[float, float], margin: float = 0.02) -> bool:
+        return (
+            margin * frame_width <= pt[0] <= (1.0 - margin) * frame_width
+            and margin * frame_height <= pt[1] <= (1.0 - margin) * frame_height
+        )
+
+    # Reject out-of-frame or anatomically inverted detections (ear below shoulder)
+    if not _in_frame(shoulder, 0.02) or not _in_frame(ear, 0.02):
+        return _undetected_response(frame, include_image=include_image, view_mode="side")
+    if ear[1] >= shoulder[1] - 0.03 * frame_height:
+        return _undetected_response(frame, include_image=include_image, view_mode="side")
+
+    # Strict in-frame hip check to avoid phantom edge hips pulling the torso line
     hip: Optional[Tuple[float, float]] = None
-    if len(kps_xy) > idx_hip and float(kps_conf[idx_hip]) >= 0.35:
+    if len(kps_xy) > idx_hip and float(kps_conf[idx_hip]) >= 0.55:
         cand_hip = (float(kps_xy[idx_hip][0]), float(kps_xy[idx_hip][1]))
-        if cand_hip[1] > shoulder[1] + 20.0:
+        if (
+            0.05 * frame_width <= cand_hip[0] <= 0.95 * frame_width
+            and cand_hip[1] <= 0.93 * frame_height
+            and cand_hip[1] > shoulder[1] + max(20.0, 0.12 * frame_height)
+        ):
             hip = cand_hip
 
     # Facing direction in image coordinates (+1 right, -1 left)

@@ -1016,6 +1016,7 @@
       const DEFAULT_NECK = Number("{{ default_neck_ratio }}") || 0.58;
       const DEFAULT_FACE = Number("{{ default_face_ratio }}") || 0.11;
       const FRAME_DELAY_MS = 45;
+      const MAX_MISSED_FRAMES = 5;
       const JPEG_QUALITY = 0.68;
       const CAPTURE_W = 320;
       const CAPTURE_H = 240;
@@ -1046,6 +1047,9 @@
         baselineSideFace: null,
         viewMode: "auto",           // "auto" | "front" | "side"
         detectedViewMode: "front",  // "front" | "side"
+        missedFrames: 0,
+        sideKpFilter: null,
+        emaMetrics: null,
         lastMetrics: null,
         healthyMs: 0,
         poorMs: 0,
@@ -1850,9 +1854,9 @@
           return;
         }
 
-        const alpha = 1 - Math.exp(-18 * dtSec);
         const t = state.targetPose;
         const isSidePose = t.mode === "side";
+        const alpha = 1 - Math.exp(-(isSidePose ? 10 : 18) * dtSec);
         const prev = state.smoothPose && state.smoothPose.mode === (isSidePose ? "side" : "front")
           ? state.smoothPose
           : null;
@@ -2058,6 +2062,23 @@
         drawJointNode(ctx, nx, ny, statusHex, 5.2);
       }
 
+      function resetTrackingStability() {
+        state.missedFrames = 0;
+        state.sideKpFilter = null;
+        state.emaMetrics = null;
+      }
+
+      function smoothSidePt(prevPt, rawPt) {
+        if (!rawPt) return null;
+        if (!prevPt) return [rawPt[0], rawPt[1]];
+        const dx = rawPt[0] - prevPt[0];
+        const dy = rawPt[1] - prevPt[1];
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.0035) return prevPt;
+        const alpha = dist > 0.16 ? 0.16 : dist > 0.045 ? 0.40 : 0.24;
+        return [prevPt[0] + dx * alpha, prevPt[1] + dy * alpha];
+      }
+
       function applyAnalysisResult(data) {
         const now = performance.now();
         state.aiTimestamps.push(now);
@@ -2066,6 +2087,13 @@
         state.lastTickTs = now;
 
         if (!data.detected) {
+          if (state.targetPose && state.missedFrames < MAX_MISSED_FRAMES) {
+            state.missedFrames += 1;
+            return;
+          }
+          state.missedFrames = MAX_MISSED_FRAMES;
+          state.sideKpFilter = null;
+          state.emaMetrics = null;
           state.targetPose = null;
           state.lastMetrics = null;
           state.badPostureStartTs = null;
@@ -2097,14 +2125,49 @@
           return;
         }
 
-        state.targetPose = data.keypoints || null;
+        state.missedFrames = 0;
+
+        let poseKps = data.keypoints || null;
+        if (poseKps && poseKps.mode === "side") {
+          const prevF = state.sideKpFilter;
+          const filtered = {
+            ...poseKps,
+            ear: smoothSidePt(prevF?.ear, poseKps.ear),
+            shoulder: smoothSidePt(prevF?.shoulder, poseKps.shoulder),
+            nose: smoothSidePt(prevF?.nose, poseKps.nose),
+            hip: poseKps.hip ? smoothSidePt(prevF?.hip, poseKps.hip) : null,
+          };
+          state.sideKpFilter = filtered;
+          poseKps = filtered;
+        } else {
+          state.sideKpFilter = null;
+        }
+
+        state.targetPose = poseKps;
         state.poseStatus = data.status || "ideal";
         state.detectedViewMode = data.view_mode === "side" ? "side" : "front";
         state.lastMetrics = data.metrics;
         el.viewportViewLabel.textContent = state.detectedViewMode === "side" ? "Samping" : "Depan";
         updateBaselineUI();
 
-        const score = Number(data.score ?? 0);
+        const rawScore = Number(data.score ?? 0);
+        let score = rawScore;
+        if (state.detectedViewMode === "side") {
+          const prevEma = state.emaMetrics?.mode === "side" ? state.emaMetrics : null;
+          const sScore = prevEma ? prevEma.score + (rawScore - prevEma.score) * 0.28 : rawScore;
+          const sNeck = prevEma
+            ? prevEma.neckAngle + (Number(data.metrics.neck_angle ?? 0) - prevEma.neckAngle) * 0.28
+            : Number(data.metrics.neck_angle ?? 0);
+          const sTorso = prevEma
+            ? prevEma.torsoAngle + (Number(data.metrics.torso_angle ?? 0) - prevEma.torsoAngle) * 0.28
+            : Number(data.metrics.torso_angle ?? 0);
+          state.emaMetrics = { mode: "side", score: sScore, neckAngle: sNeck, torsoAngle: sTorso };
+          score = Math.round(sScore);
+          data.metrics.neck_angle = Number(sNeck.toFixed(1));
+          data.metrics.torso_angle = Number(sTorso.toFixed(1));
+        } else {
+          state.emaMetrics = null;
+        }
         el.scoreValue.textContent = String(score);
         el.statusLabel.textContent = data.status_label || "Postur Bagus & Sehat";
         el.scoreProgressBar.style.width = `${score}%`;
@@ -2320,6 +2383,7 @@
           state.lastRenderTs = null;
           state.targetPose = null;
           state.smoothPose = null;
+          resetTrackingStability();
           state.renderTimestamps = [];
           state.aiTimestamps = [];
 
@@ -2371,6 +2435,7 @@
 
         state.targetPose = null;
         state.smoothPose = null;
+        resetTrackingStability();
         state.lastMetrics = null;
         state.lastTickTs = null;
         state.badPostureStartTs = null;
@@ -2595,6 +2660,7 @@
           const mode = btn.getAttribute("data-view-mode") || "auto";
           state.viewMode = mode;
           state.smoothPose = null;
+          resetTrackingStability();
           updateViewModeUI();
           const label = mode === "side" ? "Tampak Samping" : mode === "front" ? "Tampak Depan" : "Otomatis (Depan & Samping)";
           showToast(`Mode kamera diatur ke ${label}.`);
