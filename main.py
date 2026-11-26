@@ -331,10 +331,10 @@ def _analyze_side_profile(
             and margin * frame_height <= pt[1] <= (1.0 - margin) * frame_height
         )
 
-    # Reject out-of-frame or anatomically inverted detections (ear below shoulder)
+    # Reject out-of-frame or upside-down glitch detections (still allow deep forward slouching)
     if not _in_frame(shoulder, 0.02) or not _in_frame(ear, 0.02):
         return _undetected_response(frame, include_image=include_image, view_mode="side")
-    if ear[1] >= shoulder[1] - 0.03 * frame_height:
+    if ear[1] > shoulder[1] + 0.08 * frame_height:
         return _undetected_response(frame, include_image=include_image, view_mode="side")
 
     # Strict in-frame hip check to avoid phantom edge hips pulling the torso line
@@ -348,13 +348,12 @@ def _analyze_side_profile(
         ):
             hip = cand_hip
 
-    # Facing direction in image coordinates (+1 right, -1 left)
-    face_dir = 1.0 if (nose[0] - ear[0]) >= 0 else -1.0
-    if abs(nose[0] - ear[0]) < 4.0:
-        face_dir = 1.0 if (nose[0] - shoulder[0]) >= 0 else -1.0
+    # Facing direction in image coordinates (+1 right, -1 left) — robust when looking down
+    dir_signal = (nose[0] - ear[0]) + 0.55 * (nose[0] - shoulder[0])
+    face_dir = 1.0 if dir_signal >= 0 else -1.0
 
     # 1. Forward Head / Neck Angle relative to vertical plumb line
-    dy_neck = max(shoulder[1] - ear[1], 1.0)
+    dy_neck = max(shoulder[1] - ear[1], 12.0)
     forward_dx = (ear[0] - shoulder[0]) * face_dir
     neck_angle = math.degrees(math.atan2(max(forward_dx, 0.0), dy_neck))
     target_neck_angle = _sanitize_baseline(baseline_neck_angle, low=0.0, high=35.0, default=0.0)
@@ -557,18 +556,24 @@ def _analyze_frame_sync(
     ls_conf = float(kps_conf[KP_LEFT_SHOULDER])
     rs_conf = float(kps_conf[KP_RIGHT_SHOULDER])
 
-    # Determine whether to run Side Profile or Front View
+    # Determine whether to run Side Profile or Front View (slouch-proof Euclidean + nose-offset)
     use_side = mode_clean == "side"
     if mode_clean == "auto":
         both_sh_ok = ls_conf >= KEYPOINT_CONF_THRESHOLD and rs_conf >= KEYPOINT_CONF_THRESHOLD
-        if not both_sh_ok and (ls_conf >= 0.35 or rs_conf >= 0.35):
+        if not both_sh_ok and (ls_conf >= 0.40 or rs_conf >= 0.40):
             use_side = True
         elif both_sh_ok:
-            dx_sh = abs(float(kps_xy[KP_LEFT_SHOULDER][0]) - float(kps_xy[KP_RIGHT_SHOULDER][0]))
-            mid_sh_y = (float(kps_xy[KP_LEFT_SHOULDER][1]) + float(kps_xy[KP_RIGHT_SHOULDER][1])) / 2.0
-            dy_head = max(mid_sh_y - float(kps_xy[KP_NOSE][1]), 20.0)
-            # In side view, horizontal separation between left & right shoulder collapses relative to head height
-            if (dx_sh / dy_head) < 0.72:
+            ls_x, ls_y = float(kps_xy[KP_LEFT_SHOULDER][0]), float(kps_xy[KP_LEFT_SHOULDER][1])
+            rs_x, rs_y = float(kps_xy[KP_RIGHT_SHOULDER][0]), float(kps_xy[KP_RIGHT_SHOULDER][1])
+            nose_x, nose_y = float(kps_xy[KP_NOSE][0]), float(kps_xy[KP_NOSE][1])
+            dx_sh = abs(ls_x - rs_x)
+            mid_sh_x = (ls_x + rs_x) / 2.0
+            mid_sh_y = (ls_y + rs_y) / 2.0
+            # Euclidean neck-to-nose length stays large even during heavy forward slouching
+            head_dist = max(math.hypot(mid_sh_x - nose_x, mid_sh_y - nose_y), 24.0)
+            sh_to_head = dx_sh / head_dist
+            nose_out = abs(nose_x - mid_sh_x) / max(dx_sh, 1.0)
+            if sh_to_head < 0.78 or (nose_out > 0.85 and sh_to_head < 1.05):
                 use_side = True
 
     if use_side:

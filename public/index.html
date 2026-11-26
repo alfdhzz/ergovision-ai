@@ -1031,7 +1031,7 @@
       const LANDMARK_VIS_THRESHOLD = 0.42;
       const AI_INTERVAL_MS = 70;
       const MAX_MISSED_FRAMES = 5;
-      const AUTO_SWITCH_STREAK = 4;
+      const AUTO_SWITCH_STREAK = 3;
       const SIDE_SWITCH_STREAK = 5;
       const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
       const MEDIAPIPE_MODEL_URL =
@@ -2411,8 +2411,8 @@
         const rawEarLm = earOk ? lmEar : lmNose;
         const rawNoseLm = noseOk ? lmNose : rawEarLm;
 
-        // Sanity check: ear/head must be above shoulder (rejects inverted/exploded detections)
-        if (rawEarLm.y >= lmSh.y - 0.03) {
+        // Sanity check: reject truly inverted upside-down glitches, while still allowing deep forward slouching
+        if (rawEarLm.y > lmSh.y + 0.08) {
           return undetectedPayload("side");
         }
 
@@ -2441,13 +2441,11 @@
         const nosePx = [noseNorm[0] * frameW, noseNorm[1] * frameH];
         const hipPx = hipNorm ? [hipNorm[0] * frameW, hipNorm[1] * frameH] : null;
 
-        // Stabilized facing direction (+1 right, -1 left)
+        // Stabilized facing direction (+1 right, -1 left) — robust even when looking straight down
         let faceDir = prevF?.faceDir ?? 1;
-        const noseEarDx = nosePx[0] - earPx[0];
-        if (Math.abs(noseEarDx) >= Math.max(6, frameW * 0.014)) {
-          faceDir = noseEarDx >= 0 ? 1 : -1;
-        } else if (Math.abs(nosePx[0] - shPx[0]) >= Math.max(8, frameW * 0.02)) {
-          faceDir = nosePx[0] - shPx[0] >= 0 ? 1 : -1;
+        const dirSignal = (nosePx[0] - earPx[0]) + 0.55 * (nosePx[0] - shPx[0]);
+        if (Math.abs(dirSignal) >= Math.max(8, frameW * 0.018)) {
+          faceDir = dirSignal >= 0 ? 1 : -1;
         }
 
         state.sideKpFilter = {
@@ -2459,7 +2457,7 @@
         };
 
         // 1. Forward Head / Neck Angle from vertical plumb line
-        const dyNeck = Math.max(shPx[1] - earPx[1], 1);
+        const dyNeck = Math.max(shPx[1] - earPx[1], 12);
         const forwardDx = (earPx[0] - shPx[0]) * faceDir;
         const neckAngle = (Math.atan2(Math.max(forwardDx, 0), dyNeck) * 180) / Math.PI;
         const targetNeckAngle = state.baselineSideNeck ?? 0;
@@ -2601,7 +2599,7 @@
         const lmLeftShoulder = landmarks[11];
         const lmRightShoulder = landmarks[12];
 
-        // Auto (Schmitt-trigger hysteresis + debounce) or Manual Front vs Side View selection
+        // Auto (Slouch-proof Euclidean + nose-offset + 3D yaw Schmitt-trigger) or Manual Front vs Side View
         let useSide = state.viewMode === "side";
         if (state.viewMode === "auto") {
           const bothShOk =
@@ -2613,23 +2611,45 @@
             (inFrameBounds(lmLeftShoulder, 0.02) && vis(lmLeftShoulder) >= 0.45) ||
             (inFrameBounds(lmRightShoulder, 0.02) && vis(lmRightShoulder) >= 0.45);
 
-          let desiredMode = state.detectedViewMode || "front";
+          const curMode = state.detectedViewMode || "front";
+          let desiredMode = curMode;
           if (!bothShOk && anyShOk) {
             desiredMode = "side";
           } else if (bothShOk) {
             const dxSh = Math.abs(lmLeftShoulder.x - lmRightShoulder.x) * frameW;
+            const midShX = ((lmLeftShoulder.x + lmRightShoulder.x) / 2) * frameW;
             const midShY = ((lmLeftShoulder.y + lmRightShoulder.y) / 2) * frameH;
-            const dyHead = Math.max(midShY - lmNose.y * frameH, 24);
-            const ratio = dxSh / dyHead;
-            // Schmitt trigger: enter side below 0.60, return to front above 0.88
-            if (desiredMode === "side") {
-              if (ratio > 0.88) desiredMode = "front";
+            const noseX = lmNose.x * frameW;
+            const noseY = lmNose.y * frameH;
+            // Euclidean distance from mid-shoulder to nose stays large even during deep forward slouching
+            const headDist = Math.max(Math.hypot(midShX - noseX, midShY - noseY), 24);
+            const shToHead = dxSh / headDist;
+            // In side view, nose projects outside the narrow shoulder span; in front view it sits between shoulders
+            const noseOut = Math.abs(noseX - midShX) / Math.max(dxSh, 1);
+            // MediaPipe 3D torso yaw angle (large in side view, small in front view)
+            const dzSh = Math.abs((lmLeftShoulder.z ?? 0) - (lmRightShoulder.z ?? 0));
+            const dxShNorm = Math.abs(lmLeftShoulder.x - lmRightShoulder.x);
+            const bodyYawDeg = (Math.atan2(dzSh, Math.max(dxShNorm, 1e-4)) * 180) / Math.PI;
+
+            const strongSide =
+              shToHead < 0.78 ||
+              (noseOut > 0.85 && shToHead < 1.05) ||
+              (bodyYawDeg > 52 && shToHead < 1.05);
+            const strongFront = shToHead > 1.02 && noseOut < 0.55 && bodyYawDeg < 38;
+
+            if (curMode === "side") {
+              if (strongFront) desiredMode = "front";
             } else {
-              if (ratio < 0.60) desiredMode = "side";
+              if (strongSide) desiredMode = "side";
             }
           }
 
-          if (desiredMode !== (state.detectedViewMode || "front")) {
+          if (!state.targetPose) {
+            // Immediate lock on first valid frame after camera start/recovery
+            useSide = desiredMode === "side";
+            state.autoModeCandidate = null;
+            state.autoModeStreak = 0;
+          } else if (desiredMode !== curMode) {
             if (state.autoModeCandidate === desiredMode) {
               state.autoModeStreak += 1;
             } else {
@@ -2643,7 +2663,7 @@
               state.sideKpFilter = null;
               state.emaMetrics = null;
             } else {
-              useSide = state.detectedViewMode === "side";
+              useSide = curMode === "side";
             }
           } else {
             state.autoModeCandidate = null;
