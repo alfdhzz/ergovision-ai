@@ -402,7 +402,7 @@
                 class="hidden items-center gap-2 rounded-md bg-[#192641]/75 px-2.5 py-1 text-[11px] font-medium text-[#F8F9FA] backdrop-blur-sm"
               >
                 <span id="viewportLiveDot" class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-calm"></span>
-                <span>Aktif</span>
+                <span id="viewportViewLabel">Aktif</span>
                 <span id="fpsCounter" class="tnum border-l border-white/20 pl-2 text-[#D2E0EE]">-- FPS</span>
               </div>
             </div>
@@ -507,12 +507,43 @@
             </button>
           </div>
 
-          <div
-            id="baselineSummaryWrap"
-            class="text-xs text-[#596779]"
-            title="Nilai patokan tinggi leher & jarak layar yang aktif"
-          >
-            Patokan: <span id="baselineSummary" class="font-semibold text-[#192641]">Standar</span>
+          <div class="flex flex-wrap items-center gap-3">
+            <!-- Clean View Mode Selector: Otomatis | Depan | Samping -->
+            <div
+              class="inline-flex items-center rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] p-0.5 text-[11px] font-medium"
+              role="group"
+              aria-label="Pilih sudut deteksi kamera"
+            >
+              <button
+                type="button"
+                data-view-mode="auto"
+                class="view-mode-btn rounded-md bg-[#192641] px-2.5 py-1 text-[#F8F9FA] transition"
+              >
+                Otomatis
+              </button>
+              <button
+                type="button"
+                data-view-mode="front"
+                class="view-mode-btn rounded-md px-2.5 py-1 text-[#596779] transition hover:text-[#192641]"
+              >
+                Depan
+              </button>
+              <button
+                type="button"
+                data-view-mode="side"
+                class="view-mode-btn rounded-md px-2.5 py-1 text-[#596779] transition hover:text-[#192641]"
+              >
+                Samping
+              </button>
+            </div>
+
+            <div
+              id="baselineSummaryWrap"
+              class="text-xs text-[#596779]"
+              title="Nilai patokan tinggi leher & jarak layar yang aktif"
+            >
+              Patokan: <span id="baselineSummary" class="font-semibold text-[#192641]">Standar</span>
+            </div>
           </div>
         </div>
 
@@ -580,11 +611,11 @@
 
           <!-- 3 Architectural Metrics Row (Hairline Divided, No Cluttered Pills) -->
           <div class="grid grid-cols-3 divide-x divide-[#DCE5F0] bg-white">
-            <!-- Bahu -->
+            <!-- Bahu / Punggung -->
             <div class="p-3 sm:p-3.5">
               <div class="flex items-center gap-1.5">
                 <span id="dotShoulder" class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#A1BDD0]"></span>
-                <span class="text-[11px] font-medium text-[#596779]">Bahu</span>
+                <span id="labelShoulder" class="text-[11px] font-medium text-[#596779]">Bahu</span>
               </div>
               <div id="metricShoulder" class="tnum mt-1.5 text-sm font-bold text-[#192641] sm:text-base">--°</div>
               <p id="subShoulder" class="mt-0.5 text-[10.5px] text-[#596779] sm:text-[11px]">Batas ≤ {{ ideal_shoulder_tilt }}°</p>
@@ -1010,6 +1041,11 @@
         abortController: null,
         baselineNeck: null,
         baselineFace: null,
+        baselineSideNeck: null,
+        baselineSideTorso: null,
+        baselineSideFace: null,
+        viewMode: "auto",           // "auto" | "front" | "side"
+        detectedViewMode: "front",  // "front" | "side"
         lastMetrics: null,
         healthyMs: 0,
         poorMs: 0,
@@ -1079,6 +1115,7 @@
         headerLiveDot: document.getElementById("headerLiveDot"),
         headerLiveText: document.getElementById("headerLiveText"),
         viewportLiveBadge: document.getElementById("viewportLiveBadge"),
+        viewportViewLabel: document.getElementById("viewportViewLabel"),
         fpsCounter: document.getElementById("fpsCounter"),
         calibrationBadge: document.getElementById("calibrationBadge"),
         calibrationDot: document.getElementById("calibrationDot"),
@@ -1098,6 +1135,7 @@
         statusLabel: document.getElementById("statusLabel"),
         scoreProgressBar: document.getElementById("scoreProgressBar"),
         metricShoulder: document.getElementById("metricShoulder"),
+        labelShoulder: document.getElementById("labelShoulder"),
         dotShoulder: document.getElementById("dotShoulder"),
         subShoulder: document.getElementById("subShoulder"),
         metricNeckStatus: document.getElementById("metricNeckStatus"),
@@ -1280,11 +1318,18 @@
       // =======================================================================
       // LocalStorage Persistence (Calibration & Notification Preference)
       // =======================================================================
-      function saveCalibrationToStorage(neck, face) {
+      function saveCalibrationToStorage() {
         try {
           localStorage.setItem(
             STORAGE_CALIB_KEY,
-            JSON.stringify({ neck_ratio: neck, face_ratio: face, savedAt: Date.now() })
+            JSON.stringify({
+              neck_ratio: state.baselineNeck,
+              face_ratio: state.baselineFace,
+              side_neck: state.baselineSideNeck,
+              side_torso: state.baselineSideTorso,
+              side_face: state.baselineSideFace,
+              savedAt: Date.now(),
+            })
           );
         } catch (_) {}
       }
@@ -1306,6 +1351,12 @@
               state.baselineNeck = n;
               state.baselineFace = f;
             }
+            const sn = Number(parsed?.side_neck);
+            const st = Number(parsed?.side_torso);
+            const sf = Number(parsed?.side_face);
+            if (Number.isFinite(sn) && sn >= 0 && sn <= 35) state.baselineSideNeck = sn;
+            if (Number.isFinite(st) && st >= 0 && st <= 30) state.baselineSideTorso = st;
+            if (Number.isFinite(sf) && sf >= 0.03 && sf <= 0.45) state.baselineSideFace = sf;
           }
           const rawNotif = localStorage.getItem(STORAGE_NOTIF_KEY);
           if (rawNotif === "on" && "Notification" in window && Notification.permission === "granted") {
@@ -1581,22 +1632,44 @@
       // UI State Updaters
       // =======================================================================
       function updateBaselineUI() {
-        const neck = state.baselineNeck ?? DEFAULT_NECK;
-        const face = state.baselineFace ?? DEFAULT_FACE;
-        const isPersonal = state.baselineNeck !== null && state.baselineFace !== null;
+        const hasFront = state.baselineNeck !== null && state.baselineFace !== null;
+        const hasSide = state.baselineSideNeck !== null || state.baselineSideFace !== null;
+        const isPersonal = state.detectedViewMode === "side" ? hasSide : hasFront;
 
-        el.baselineSummaryWrap.title = `Tinggi leher: ${neck.toFixed(2)} · Jarak layar: ${face.toFixed(2)}`;
-        if (isPersonal) {
-          el.baselineSummary.textContent = "Pribadi Aktif";
+        if (state.detectedViewMode === "side") {
+          const sn = state.baselineSideNeck ?? 0;
+          const sf = state.baselineSideFace ?? 0.095;
+          el.baselineSummaryWrap.title = `Patokan Samping — Leher: ${sn.toFixed(1)}° · Jarak: ${sf.toFixed(3)}`;
+        } else {
+          const neck = state.baselineNeck ?? DEFAULT_NECK;
+          const face = state.baselineFace ?? DEFAULT_FACE;
+          el.baselineSummaryWrap.title = `Patokan Depan — Tinggi leher: ${neck.toFixed(2)} · Jarak layar: ${face.toFixed(2)}`;
+        }
+
+        if (isPersonal || hasFront || hasSide) {
+          el.baselineSummary.textContent = isPersonal ? "Pribadi Aktif" : "Standar";
           el.btnResetCalibration.classList.remove("hidden");
-          el.calibrationBadgeText.textContent = "Patokan Pribadi";
-          el.calibrationDot.className = "h-1.5 w-1.5 rounded-full bg-emerald-400";
+          el.calibrationBadgeText.textContent = isPersonal ? "Patokan Pribadi" : "Patokan Standar";
+          el.calibrationDot.className = isPersonal
+            ? "h-1.5 w-1.5 rounded-full bg-emerald-400"
+            : "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]";
         } else {
           el.baselineSummary.textContent = "Standar";
           el.btnResetCalibration.classList.add("hidden");
           el.calibrationBadgeText.textContent = "Patokan Standar";
           el.calibrationDot.className = "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]";
         }
+      }
+
+      function updateViewModeUI() {
+        document.querySelectorAll(".view-mode-btn").forEach((btn) => {
+          const mode = btn.getAttribute("data-view-mode");
+          if (mode === state.viewMode) {
+            btn.className = "view-mode-btn rounded-md bg-[#192641] px-2.5 py-1 text-[#F8F9FA] transition";
+          } else {
+            btn.className = "view-mode-btn rounded-md px-2.5 py-1 text-[#596779] transition hover:text-[#192641]";
+          }
+        });
       }
 
       function updateTimersUI() {
@@ -1779,16 +1852,10 @@
 
         const alpha = 1 - Math.exp(-18 * dtSec);
         const t = state.targetPose;
-        const prev = state.smoothPose;
-        state.smoothPose = {
-          nose: lerpPoint(prev?.nose, t.nose, alpha),
-          left_shoulder: lerpPoint(prev?.left_shoulder, t.left_shoulder, alpha),
-          right_shoulder: lerpPoint(prev?.right_shoulder, t.right_shoulder, alpha),
-          mid_shoulder: lerpPoint(prev?.mid_shoulder, t.mid_shoulder, alpha),
-          left_eye: lerpPoint(prev?.left_eye, t.left_eye, alpha),
-          right_eye: lerpPoint(prev?.right_eye, t.right_eye, alpha),
-          flags: t.flags || {},
-        };
+        const isSidePose = t.mode === "side";
+        const prev = state.smoothPose && state.smoothPose.mode === (isSidePose ? "side" : "front")
+          ? state.smoothPose
+          : null;
 
         const cw = rect.width;
         const ch = rect.height;
@@ -1806,21 +1873,125 @@
           offsetX = 0;
           offsetY = (ch - renderH) / 2;
         }
-
         const mapPt = (pt) => [offsetX + pt[0] * renderW, offsetY + pt[1] * renderH];
+        const statusHex = STATUS_HEX[state.poseStatus] || "#A1BDD0";
+
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        if (isSidePose) {
+          state.smoothPose = {
+            mode: "side",
+            ear: lerpPoint(prev?.ear, t.ear, alpha),
+            shoulder: lerpPoint(prev?.shoulder, t.shoulder, alpha),
+            nose: lerpPoint(prev?.nose, t.nose, alpha),
+            hip: lerpPoint(prev?.hip, t.hip, alpha),
+            face_dir: t.face_dir || 1,
+            flags: t.flags || {},
+          };
+          const p = state.smoothPose;
+          const [ex, ey] = mapPt(p.ear);
+          const [sx, sy] = mapPt(p.shoulder);
+          const [nx, ny] = mapPt(p.nose);
+          const hipPt = p.hip ? mapPt(p.hip) : null;
+
+          const neckHex = p.flags.neck_forward ? "#F43F5E" : "#D2E0EE";
+          const torsoHex = p.flags.torso_slouched ? "#F59E0B" : "#A1BDD0";
+          const eyeHex = p.flags.too_close ? "#F43F5E" : "#A1BDD0";
+
+          // Vertical dashed ideal plumb line straight up through shoulder
+          const plumbTop = Math.max(12, ey - 32);
+          const plumbBot = Math.min(ch - 12, (hipPt ? hipPt[1] : sy) + 28);
+          ctx.save();
+          ctx.setLineDash([6, 6]);
+          ctx.strokeStyle = "rgba(248, 249, 250, 0.45)";
+          ctx.lineWidth = 1.25;
+          ctx.beginPath();
+          ctx.moveTo(sx, plumbTop);
+          ctx.lineTo(sx, plumbBot);
+          ctx.stroke();
+          ctx.restore();
+
+          // Subtle horizontal eye-level sightline extending forward from nose
+          const sightLen = Math.min(110, cw * 0.18);
+          ctx.save();
+          ctx.setLineDash([4, 5]);
+          ctx.strokeStyle = "rgba(161, 189, 208, 0.55)";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(nx, ny);
+          ctx.lineTo(nx + (p.face_dir >= 0 ? sightLen : -sightLen), ny);
+          ctx.stroke();
+          ctx.restore();
+
+          // Contrast backing
+          ctx.strokeStyle = "rgba(25, 38, 65, 0.5)";
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          if (hipPt) {
+            ctx.moveTo(hipPt[0], hipPt[1]);
+            ctx.lineTo(sx, sy);
+          }
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(nx, ny);
+          ctx.stroke();
+
+          // Spine / Torso line
+          if (hipPt) {
+            ctx.strokeStyle = torsoHex;
+            ctx.lineWidth = 2.6;
+            ctx.beginPath();
+            ctx.moveTo(hipPt[0], hipPt[1]);
+            ctx.lineTo(sx, sy);
+            ctx.stroke();
+            drawJointNode(ctx, hipPt[0], hipPt[1], torsoHex, 5);
+          }
+
+          // Shoulder -> Ear neck alignment line
+          ctx.strokeStyle = neckHex;
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+
+          // Ear -> Nose line
+          ctx.strokeStyle = eyeHex;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(nx, ny);
+          ctx.stroke();
+
+          drawJointNode(ctx, sx, sy, torsoHex, 5.2);
+          drawJointNode(ctx, ex, ey, neckHex, 5.2);
+          drawJointNode(ctx, nx, ny, statusHex, 4.4);
+          return;
+        }
+
+        // Front View Skeleton
+        state.smoothPose = {
+          mode: "front",
+          nose: lerpPoint(prev?.nose, t.nose, alpha),
+          left_shoulder: lerpPoint(prev?.left_shoulder, t.left_shoulder, alpha),
+          right_shoulder: lerpPoint(prev?.right_shoulder, t.right_shoulder, alpha),
+          mid_shoulder: lerpPoint(prev?.mid_shoulder, t.mid_shoulder, alpha),
+          left_eye: lerpPoint(prev?.left_eye, t.left_eye, alpha),
+          right_eye: lerpPoint(prev?.right_eye, t.right_eye, alpha),
+          flags: t.flags || {},
+        };
+
         const p = state.smoothPose;
         const [nx, ny] = mapPt(p.nose);
         const [lsx, lsy] = mapPt(p.left_shoulder);
         const [rsx, rsy] = mapPt(p.right_shoulder);
         const [msx, msy] = mapPt(p.mid_shoulder);
 
-        const statusHex = STATUS_HEX[state.poseStatus] || "#A1BDD0";
         const shoulderHex = p.flags.shoulder_tilted ? "#F59E0B" : "#A1BDD0";
         const neckHex = p.flags.tech_neck ? "#F43F5E" : "#D2E0EE";
         const eyeHex = p.flags.too_close ? "#F43F5E" : "#A1BDD0";
-
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
 
         // Subtle horizontal guide through shoulder midpoint
         const halfRef = Math.max(48, Math.abs(lsx - rsx) * 0.56);
@@ -1928,7 +2099,10 @@
 
         state.targetPose = data.keypoints || null;
         state.poseStatus = data.status || "ideal";
+        state.detectedViewMode = data.view_mode === "side" ? "side" : "front";
         state.lastMetrics = data.metrics;
+        el.viewportViewLabel.textContent = state.detectedViewMode === "side" ? "Samping" : "Depan";
+        updateBaselineUI();
 
         const score = Number(data.score ?? 0);
         el.scoreValue.textContent = String(score);
@@ -1954,20 +2128,39 @@
         }
 
         const m = data.metrics;
-        const tilted = m.shoulder_tilt > 6.5;
-        el.metricShoulder.textContent = `${Number(m.shoulder_tilt).toFixed(1)}°`;
-        el.subShoulder.textContent = tilted ? "Posisi bahu miring" : "Bahu sejajar";
-        setDotTone(el.dotShoulder, tilted ? "warning" : "ideal");
+        if (state.detectedViewMode === "side") {
+          const isTorsoMode = m.torso_metric_mode === "torso";
+          el.labelShoulder.textContent = isTorsoMode ? "Punggung" : "Tunduk";
+          const torsoDeg = Number(m.torso_angle ?? m.shoulder_tilt ?? 0);
+          const torsoBad = m.torso_status === "Membungkuk" || m.torso_status === "Menunduk";
+          const torsoWarn = m.torso_status === "Agak Bungkuk" || m.torso_status === "Agak Menunduk";
+          el.metricShoulder.textContent = `${torsoDeg.toFixed(1)}°`;
+          el.subShoulder.textContent = m.torso_status || "Tegak";
+          setDotTone(el.dotShoulder, torsoBad ? "poor" : torsoWarn ? "warning" : "ideal");
 
-        const isNeckRisk = m.neck_status === "Menunduk" || m.neck_status === "Tech Neck";
-        const isNeckWarn = m.neck_status === "Agak Menunduk" || m.neck_status === "Mulai Menunduk";
-        el.metricNeckStatus.textContent = m.neck_status || "Tegak";
-        el.metricNeckSub.textContent = isNeckRisk
-          ? "Kepala menunduk"
-          : isNeckWarn
-            ? "Sedikit menunduk"
-            : "Kepala lurus";
-        setDotTone(el.dotNeck, isNeckRisk ? "poor" : isNeckWarn ? "warning" : "ideal");
+          const neckDeg = Number(m.neck_angle ?? 0);
+          const isNeckRisk = m.neck_status === "Kepala Maju";
+          const isNeckWarn = m.neck_status === "Agak Maju";
+          el.metricNeckStatus.textContent = m.neck_status || "Lurus";
+          el.metricNeckSub.textContent = `${neckDeg.toFixed(1)}° ke depan`;
+          setDotTone(el.dotNeck, isNeckRisk ? "poor" : isNeckWarn ? "warning" : "ideal");
+        } else {
+          el.labelShoulder.textContent = "Bahu";
+          const tilted = m.shoulder_tilt > 6.5;
+          el.metricShoulder.textContent = `${Number(m.shoulder_tilt).toFixed(1)}°`;
+          el.subShoulder.textContent = tilted ? "Posisi bahu miring" : "Bahu sejajar";
+          setDotTone(el.dotShoulder, tilted ? "warning" : "ideal");
+
+          const isNeckRisk = m.neck_status === "Menunduk" || m.neck_status === "Tech Neck";
+          const isNeckWarn = m.neck_status === "Agak Menunduk" || m.neck_status === "Mulai Menunduk";
+          el.metricNeckStatus.textContent = m.neck_status || "Tegak";
+          el.metricNeckSub.textContent = isNeckRisk
+            ? "Kepala menunduk"
+            : isNeckWarn
+              ? "Sedikit menunduk"
+              : "Kepala lurus";
+          setDotTone(el.dotNeck, isNeckRisk ? "poor" : isNeckWarn ? "warning" : "ideal");
+        }
 
         const isTooClose = m.distance_status === "Terlalu Dekat";
         const isSlightlyClose = m.distance_status === "Agak Dekat";
@@ -2073,8 +2266,12 @@
         const formData = new FormData();
         formData.append("file", blob, "frame.jpg");
         formData.append("include_image", "false");
+        formData.append("view_mode", state.viewMode);
         if (state.baselineNeck !== null) formData.append("baseline_neck_ratio", String(state.baselineNeck));
         if (state.baselineFace !== null) formData.append("baseline_face_ratio", String(state.baselineFace));
+        if (state.baselineSideNeck !== null) formData.append("baseline_side_neck_angle", String(state.baselineSideNeck));
+        if (state.baselineSideTorso !== null) formData.append("baseline_side_torso_angle", String(state.baselineSideTorso));
+        if (state.baselineSideFace !== null) formData.append("baseline_side_face_ratio", String(state.baselineSideFace));
 
         state.abortController = new AbortController();
 
@@ -2363,21 +2560,45 @@
           showToast("Arahkan wajah dan kedua bahu ke kamera terlebih dahulu.");
           return;
         }
-        state.baselineNeck = Number(state.lastMetrics.neck_ratio);
-        state.baselineFace = Number(state.lastMetrics.face_ratio);
+        if (state.detectedViewMode === "side") {
+          state.baselineSideNeck = Number(state.lastMetrics.neck_angle ?? 0);
+          state.baselineSideTorso = Number(state.lastMetrics.torso_angle ?? 0);
+          state.baselineSideFace = Number(state.lastMetrics.face_ratio ?? 0.095);
+        } else {
+          state.baselineNeck = Number(state.lastMetrics.neck_ratio);
+          state.baselineFace = Number(state.lastMetrics.face_ratio);
+        }
         state.badPostureStartTs = null;
         state.chimePlayedForEpisode = false;
-        saveCalibrationToStorage(state.baselineNeck, state.baselineFace);
+        saveCalibrationToStorage();
         updateBaselineUI();
-        showToast("Posisi duduk tegak pribadi tersimpan otomatis di browser ini.");
+        showToast(
+          state.detectedViewMode === "side"
+            ? "Posisi duduk tegak tampak samping tersimpan otomatis."
+            : "Posisi duduk tegak pribadi tersimpan otomatis di browser ini."
+        );
       });
 
       el.btnResetCalibration.addEventListener("click", () => {
         state.baselineNeck = null;
         state.baselineFace = null;
+        state.baselineSideNeck = null;
+        state.baselineSideTorso = null;
+        state.baselineSideFace = null;
         clearCalibrationStorage();
         updateBaselineUI();
         showToast("Patokan dikembalikan ke standar.");
+      });
+
+      document.querySelectorAll(".view-mode-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const mode = btn.getAttribute("data-view-mode") || "auto";
+          state.viewMode = mode;
+          state.smoothPose = null;
+          updateViewModeUI();
+          const label = mode === "side" ? "Tampak Samping" : mode === "front" ? "Tampak Depan" : "Otomatis (Depan & Samping)";
+          showToast(`Mode kamera diatur ke ${label}.`);
+        });
       });
 
       el.btnToggleNotif.addEventListener("click", () => toggleDesktopNotif());
@@ -2497,6 +2718,7 @@
       });
 
       loadSavedPreferences();
+      updateViewModeUI();
       updateBaselineUI();
       updateNotifUI();
       updateTimersUI();
