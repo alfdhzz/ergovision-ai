@@ -1,0 +1,2745 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ErgoVision — Pemantau Postur &amp; Kesehatan Mata</title>
+
+  <!-- Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          colors: {
+            winter: {
+              midnight: '#192641',
+              slate: '#596779',
+              powder: '#A1BDD0',
+              mist: '#D2E0EE',
+              snow: '#F8F9FA',
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    :root {
+      --winter-midnight: #192641;
+      --winter-slate: #596779;
+      --winter-powder: #A1BDD0;
+      --winter-mist: #D2E0EE;
+      --winter-snow: #F8F9FA;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: #F8F9FA;
+      color: #192641;
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .tnum {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Subtle Winter canvas atmosphere (restrained, non-flashy) */
+    .winter-canvas {
+      background-color: #F8F9FA;
+      background-image:
+        radial-gradient(ellipse 80% 60% at 0% 0%, rgba(210, 224, 238, 0.45) 0%, transparent 65%),
+        radial-gradient(ellipse 70% 55% at 100% 100%, rgba(161, 189, 208, 0.22) 0%, transparent 60%);
+    }
+
+    /* Signature Winter Mesh Gradient (Midnight, Slate, Powder, Mist, Snow) */
+    .winter-mesh {
+      background-color: #A1BDD0;
+      background-image:
+        radial-gradient(circle at 8% 10%, #192641 0%, rgba(25, 38, 65, 0.86) 22%, transparent 56%),
+        radial-gradient(circle at 92% 94%, #192641 0%, rgba(89, 103, 121, 0.84) 26%, transparent 58%),
+        radial-gradient(circle at 30% 84%, #F8F9FA 0%, rgba(248, 249, 250, 0.84) 18%, transparent 48%),
+        radial-gradient(circle at 68% 36%, #D2E0EE 0%, rgba(210, 224, 238, 0.72) 28%, transparent 62%),
+        radial-gradient(circle at 84% 16%, #A1BDD0 0%, rgba(161, 189, 208, 0.75) 36%, transparent 68%),
+        linear-gradient(135deg, #192641 0%, #596779 34%, #A1BDD0 64%, #D2E0EE 86%, #F8F9FA 100%);
+    }
+
+    /* Refined Winter Score Header Gradient (deep, calm, editorial) */
+    .winter-score-surface {
+      background-color: #192641;
+      background-image:
+        radial-gradient(circle at 88% 15%, rgba(161, 189, 208, 0.34) 0%, transparent 52%),
+        radial-gradient(circle at 18% 95%, rgba(89, 103, 121, 0.45) 0%, transparent 55%),
+        linear-gradient(135deg, #192641 0%, #273854 54%, #4E5E73 100%);
+    }
+
+    /* Clean architectural panel (flat, hairline border, minimal shadow) */
+    .surface-panel {
+      background: #FFFFFF;
+      border: 1px solid #DCE5F0;
+      box-shadow: 0 1px 2px rgba(25, 38, 65, 0.04);
+    }
+
+    .smooth-bar {
+      transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.25s ease;
+    }
+
+    @keyframes pulseCalm {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .animate-pulse-calm {
+      animation: pulseCalm 2.2s ease-in-out infinite;
+    }
+
+    /* =========================================================================
+       Minimal Splash Preloader (No Box, Seamless Winter Mesh)
+       ========================================================================= */
+    #appPreloader {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background-color: #F8F9FA;
+      background-image:
+        radial-gradient(circle at 12% 14%, rgba(25, 38, 65, 0.20) 0%, transparent 46%),
+        radial-gradient(circle at 88% 18%, rgba(161, 189, 208, 0.50) 0%, transparent 50%),
+        radial-gradient(circle at 52% 52%, rgba(210, 224, 238, 0.60) 0%, transparent 58%),
+        radial-gradient(circle at 86% 88%, rgba(89, 103, 121, 0.26) 0%, transparent 48%),
+        radial-gradient(circle at 18% 84%, rgba(248, 249, 250, 0.96) 0%, transparent 46%);
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+
+    #appPreloader.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .preloader-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      animation: fadeUp 0.5s ease-out both;
+    }
+
+    .preloader-mark {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 3.5rem;
+      height: 3.5rem;
+      border-radius: 0.9rem;
+      box-shadow: 0 10px 24px -10px rgba(25, 38, 65, 0.45);
+    }
+
+    .preloader-track {
+      width: 10.5rem;
+      height: 2px;
+      margin-top: 1.25rem;
+      border-radius: 9999px;
+      background: rgba(25, 38, 65, 0.12);
+      overflow: hidden;
+    }
+
+    .preloader-fill {
+      height: 100%;
+      width: 20%;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, #192641 0%, #596779 65%, #A1BDD0 100%);
+      transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .preloader-inner { animation: none; }
+    }
+
+    /* =========================================================================
+       A4 PDF Print Stylesheet
+       ========================================================================= */
+    #pdfPrintSheet {
+      display: none;
+    }
+
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 12mm;
+      }
+
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      body {
+        background: #FFFFFF !important;
+        color: #192641 !important;
+      }
+
+      #appPreloader,
+      #appHeader,
+      #appMain,
+      #toastContainer,
+      #pdfPreviewModal {
+        display: none !important;
+      }
+
+      #pdfPrintSheet {
+        display: block !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="winter-canvas selection:bg-[#A1BDD0]/35 selection:text-[#192641]">
+  <!-- Minimal Splash Preloader -->
+  <div id="appPreloader" role="status" aria-live="polite" aria-label="Memuat ErgoVision">
+    <div class="preloader-inner">
+      <div class="preloader-mark winter-mesh">
+        <svg style="width:1.7rem;height:1.7rem;color:#F8F9FA;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      </div>
+      <div style="margin-top:0.95rem;font-size:1.3rem;font-weight:700;letter-spacing:-0.025em;color:#192641;">
+        ErgoVision
+      </div>
+      <div style="margin-top:0.2rem;font-size:0.78rem;font-weight:500;color:#596779;">
+        Pemantau Postur Duduk &amp; Kesehatan Mata
+      </div>
+      <div class="preloader-track">
+        <div id="preloaderBar" class="preloader-fill"></div>
+      </div>
+      <p id="preloaderStatus" style="margin-top:0.55rem;font-size:0.7rem;font-weight:500;color:#596779;">
+        Menyiapkan aplikasi...
+      </p>
+    </div>
+  </div>
+
+  <!-- Quiet Minimal Top Bar -->
+  <header id="appHeader" class="sticky top-0 z-30 border-b border-[#DCE5F0] bg-[#F8F9FA]/90 backdrop-blur-md">
+    <div class="mx-auto flex h-14 max-w-[1440px] items-center justify-between gap-2 px-3.5 sm:gap-4 sm:px-6 lg:px-8">
+      <!-- Brand -->
+      <div class="flex min-w-0 items-center gap-2.5">
+        <div
+          class="winter-mesh flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
+          aria-hidden="true"
+        >
+          <svg class="h-4 w-4 text-[#F8F9FA]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </div>
+        <div class="flex min-w-0 items-baseline gap-2.5">
+          <h1 class="truncate text-[15px] font-bold tracking-tight text-[#192641]">ErgoVision</h1>
+          <span class="hidden text-xs text-[#596779] md:inline">Pemantau Postur &amp; Kesehatan Mata</span>
+        </div>
+      </div>
+
+      <!-- Clean Action Links / Controls -->
+      <div class="flex flex-shrink-0 items-center gap-1 sm:gap-2">
+        <!-- Status Text -->
+        <div
+          id="headerLivePill"
+          class="mr-1 hidden items-center gap-1.5 text-xs font-medium text-[#596779] lg:inline-flex"
+        >
+          <span id="headerLiveDot" class="h-1.5 w-1.5 rounded-full bg-[#A1BDD0]"></span>
+          <span id="headerLiveText">Kamera nonaktif</span>
+        </div>
+
+        <span class="hidden h-4 w-px bg-[#DCE5F0] lg:inline-block" aria-hidden="true"></span>
+
+        <!-- Audio Toggle -->
+        <button
+          id="btnToggleAudio"
+          type="button"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[#596779] transition hover:bg-[#D2E0EE]/45 hover:text-[#192641] sm:h-auto sm:py-1.5"
+          aria-pressed="false"
+          aria-label="Nyalakan atau matikan pengingat suara"
+          title="Nyalakan atau matikan bunyi pengingat saat postur membungkuk"
+        >
+          <span id="audioIconOn">
+            <svg class="h-4 w-4 text-[#192641] sm:h-3.5 sm:w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+            </svg>
+          </span>
+          <span id="audioIconOff" class="hidden">
+            <svg class="h-4 w-4 text-[#596779] sm:h-3.5 sm:w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <line x1="22" y1="9" x2="16" y2="15" />
+              <line x1="16" y1="9" x2="22" y2="15" />
+            </svg>
+          </span>
+          <span id="audioLabel" class="hidden sm:inline">Suara Aktif</span>
+        </button>
+
+        <!-- Desktop Notification Toggle (for background tabs) -->
+        <button
+          id="btnToggleNotif"
+          type="button"
+          class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-[#596779] transition hover:bg-[#D2E0EE]/45 hover:text-[#192641] sm:h-auto sm:py-1.5"
+          aria-pressed="false"
+          aria-label="Aktifkan notifikasi layar"
+          title="Kirim notifikasi di layar saat Anda bekerja di tab atau aplikasi lain"
+        >
+          <svg class="h-4 w-4 text-[#192641] sm:h-3.5 sm:w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
+          <span id="notifLabel" class="hidden sm:inline">Notifikasi</span>
+          <span id="notifDot" class="hidden h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+        </button>
+
+        <!-- Print PDF Action -->
+        <button
+          id="btnOpenPdfHeader"
+          type="button"
+          class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#DCE5F0] bg-white px-2.5 text-xs font-semibold text-[#192641] transition hover:border-[#A1BDD0] hover:bg-[#F8F9FA] sm:h-auto sm:px-3 sm:py-1.5"
+        >
+          <svg class="h-3.5 w-3.5 text-[#596779]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9" />
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+            <rect x="6" y="14" width="12" height="8" />
+          </svg>
+          <span class="hidden sm:inline">Cetak PDF</span>
+          <span class="sm:hidden">PDF</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Subtle Toast Container -->
+  <div
+    id="toastContainer"
+    class="pointer-events-none fixed bottom-4 left-4 right-4 z-50 flex flex-col items-end gap-2 sm:bottom-5 sm:left-auto sm:right-5 sm:max-w-sm"
+    aria-live="polite"
+  ></div>
+
+  <!-- Main 12-Column Workspace -->
+  <main id="appMain" class="mx-auto max-w-[1440px] px-4 py-5 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+
+      <!-- =================================================================== -->
+      <!-- LEFT COLUMN (8 Cols): Spacious Camera Stage & Primary Controls      -->
+      <!-- =================================================================== -->
+      <section class="flex flex-col gap-3.5 lg:col-span-8">
+        <!-- Camera Stage -->
+        <div class="surface-panel overflow-hidden rounded-xl p-1.5">
+          <div class="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-[#192641] sm:aspect-video">
+            <!-- Live Native High-FPS Mirrored Video -->
+            <video
+              id="webcamVideo"
+              autoplay
+              playsinline
+              muted
+              class="hidden h-full w-full scale-x-[-1] object-cover"
+            ></video>
+            <canvas id="captureCanvas" class="hidden"></canvas>
+
+            <!-- Smooth 60+ FPS Skeleton Overlay -->
+            <canvas
+              id="overlayCanvas"
+              class="pointer-events-none absolute inset-0 hidden h-full w-full scale-x-[-1]"
+            ></canvas>
+
+            <!-- Minimal Winter Mesh Idle Stage (Calm, uncluttered, human-crafted) -->
+            <div
+              id="idleOverlay"
+              class="winter-mesh absolute inset-0 flex flex-col items-center justify-center p-4 text-center sm:p-6"
+            >
+              <div class="max-w-sm">
+                <h2 class="text-lg font-bold tracking-tight text-[#192641] sm:text-2xl">
+                  Mulai pantau posisi duduk Anda
+                </h2>
+                <p class="mt-1.5 text-xs leading-relaxed text-[#192641]/80 sm:mt-2 sm:text-sm">
+                  Duduk menghadap kamera seperti biasa. Video diproses langsung dan tidak pernah disimpan.
+                </p>
+                <button
+                  id="btnStartOverlay"
+                  type="button"
+                  class="mt-4 inline-flex items-center gap-2 rounded-lg bg-[#192641] px-4 py-2.5 text-xs font-semibold text-[#F8F9FA] shadow-sm transition hover:bg-[#243456] sm:mt-5 sm:px-5 sm:text-sm"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                    <circle cx="12" cy="13" r="3" />
+                  </svg>
+                  <span>Nyalakan Kamera</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Quiet Top-Left Live Tag -->
+            <div class="pointer-events-none absolute left-3 top-3 z-10">
+              <div
+                id="viewportLiveBadge"
+                class="hidden items-center gap-2 rounded-md bg-[#192641]/75 px-2.5 py-1 text-[11px] font-medium text-[#F8F9FA] backdrop-blur-sm"
+              >
+                <span id="viewportLiveDot" class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-calm"></span>
+                <span>Aktif</span>
+                <span id="fpsCounter" class="tnum border-l border-white/20 pl-2 text-[#D2E0EE]">-- FPS</span>
+              </div>
+            </div>
+
+            <!-- Quiet Top-Right Baseline Tag -->
+            <div class="pointer-events-none absolute right-3 top-3 z-10">
+              <div
+                id="calibrationBadge"
+                class="hidden items-center gap-1.5 rounded-md bg-[#192641]/75 px-2.5 py-1 text-[11px] font-medium text-[#D2E0EE] backdrop-blur-sm"
+              >
+                <span id="calibrationDot" class="h-1.5 w-1.5 rounded-full bg-[#A1BDD0]"></span>
+                <span id="calibrationBadgeText">Patokan Standar</span>
+              </div>
+            </div>
+
+            <!-- Eye Rest Calm Overlay inside Viewport -->
+            <div
+              id="eyeBreakOverlay"
+              class="winter-score-surface absolute inset-0 z-20 hidden flex-col items-center justify-center p-6 text-center text-[#F8F9FA] backdrop-blur-md"
+            >
+              <p class="text-[11px] font-semibold uppercase tracking-widest text-[#A1BDD0]">Waktunya Istirahat Mata</p>
+              <div id="eyeRestCountdown" class="tnum mt-2 text-5xl font-bold tracking-tight">20</div>
+              <p id="eyeRestGuideText" class="mt-2 max-w-sm text-xs leading-relaxed text-[#D2E0EE]">
+                Alihkan pandangan Anda ke objek jauh (±6 meter) dan berkedip pelan selama 20 detik agar otot mata rileks.
+              </p>
+              <div class="mt-4 h-1.5 w-48 overflow-hidden rounded-full bg-white/15">
+                <div id="eyeRestBar" class="smooth-bar h-full rounded-full bg-[#A1BDD0]" style="width: 100%"></div>
+              </div>
+              <button
+                id="btnSkipEyeBreak"
+                type="button"
+                class="mt-4 rounded-lg border border-white/25 px-3.5 py-1.5 text-xs font-medium text-[#F8F9FA] transition hover:bg-white/10"
+              >
+                Lewati jeda
+              </button>
+            </div>
+
+            <!-- Floating Alert Inside Frame -->
+            <div
+              id="floatingAlert"
+              class="pointer-events-none absolute inset-x-3 bottom-3 z-10 hidden translate-y-2 opacity-0 transition-all duration-200"
+            >
+              <div
+                id="floatingAlertBox"
+                class="flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 shadow-md backdrop-blur-md"
+              >
+                <div class="flex items-start gap-2.5">
+                  <span id="floatingAlertIcon" class="mt-0.5 flex-shrink-0"></span>
+                  <div>
+                    <p id="floatingAlertTitle" class="text-xs font-semibold"></p>
+                    <p id="floatingAlertDetail" class="mt-0.5 text-[11px] opacity-90"></p>
+                  </div>
+                </div>
+                <div id="chimeHoldWrap" class="hidden flex-shrink-0 text-right">
+                  <span id="chimeHoldText" class="tnum text-[11px] font-semibold opacity-90">0.0s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clean Control Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-2.5">
+          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <button
+              id="btnCameraToggle"
+              type="button"
+              class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#192641] px-4 py-2.5 text-xs font-semibold text-[#F8F9FA] transition hover:bg-[#243456] sm:flex-none sm:py-2"
+            >
+              <svg id="iconCameraStart" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <svg id="iconCameraStop" class="hidden h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <rect x="6" y="6" width="12" height="12" rx="1.5" />
+              </svg>
+              <span id="btnCameraLabel">Nyalakan Kamera</span>
+            </button>
+
+            <button
+              id="btnCalibrate"
+              type="button"
+              class="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-[#DCE5F0] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#192641] transition hover:border-[#A1BDD0] hover:bg-[#F8F9FA] sm:flex-none sm:py-2"
+              title="Duduk tegak seperti biasa lalu klik untuk menyimpan posisi tegak pribadi Anda"
+            >
+              <svg class="h-3.5 w-3.5 text-[#596779]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <circle cx="12" cy="12" r="2.5" />
+                <line x1="12" y1="2" x2="12" y2="5" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+                <line x1="2" y1="12" x2="5" y2="12" />
+                <line x1="19" y1="12" x2="22" y2="12" />
+              </svg>
+              <span>Simpan Posisi Tegak Saya</span>
+            </button>
+
+            <button
+              id="btnResetCalibration"
+              type="button"
+              class="hidden rounded-lg px-2.5 py-2 text-xs font-medium text-[#596779] transition hover:bg-[#D2E0EE]/40 hover:text-[#192641]"
+            >
+              Pakai Standar
+            </button>
+          </div>
+
+          <div
+            id="baselineSummaryWrap"
+            class="text-xs text-[#596779]"
+            title="Nilai patokan tinggi leher & jarak layar yang aktif"
+          >
+            Patokan: <span id="baselineSummary" class="font-semibold text-[#192641]">Standar</span>
+          </div>
+        </div>
+
+        <!-- Inline Camera Error -->
+        <div
+          id="cameraErrorBox"
+          class="hidden items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700"
+        >
+          <svg class="h-4 w-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span id="cameraErrorText"></span>
+        </div>
+
+        <!-- Quiet Privacy Note -->
+        <p class="text-[11px] leading-relaxed text-[#596779]">
+          Privasi aman: gambar kamera hanya dibaca di memori sementara dan tidak pernah direkam atau disimpan.
+        </p>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- RIGHT COLUMN (4 Cols): Cohesive Telemetry & Guidance Panel          -->
+      <!-- =================================================================== -->
+      <aside class="flex flex-col gap-4 lg:col-span-4">
+        <!-- Unified Score + 3 Metrics Panel -->
+        <div class="surface-panel overflow-hidden rounded-xl">
+          <!-- Score Top Band (Winter Gradient) -->
+          <div class="winter-score-surface px-5 py-5 text-[#F8F9FA]">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-medium text-[#D2E0EE]">Nilai Postur Duduk</p>
+                <div class="mt-1.5 flex items-baseline gap-1.5">
+                  <span id="scoreValue" class="tnum text-5xl font-bold tracking-tight">--</span>
+                  <span class="text-sm font-medium text-[#A1BDD0]">/ 100</span>
+                </div>
+              </div>
+
+              <div
+                id="statusPill"
+                class="inline-flex items-center gap-1.5 rounded-md bg-white/10 px-2.5 py-1 text-xs font-medium text-[#F8F9FA]"
+              >
+                <span id="statusDot" class="h-1.5 w-1.5 rounded-full bg-[#A1BDD0]"></span>
+                <span id="statusLabel">Kamera Belum Aktif</span>
+              </div>
+            </div>
+
+            <!-- Thin Crisp Score Bar -->
+            <div class="mt-4">
+              <div class="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+                <div
+                  id="scoreProgressBar"
+                  class="smooth-bar h-full rounded-full bg-[#A1BDD0]"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <div class="mt-1.5 flex items-center justify-between text-[11px] text-[#D2E0EE]/80">
+                <span>Kurang &lt;55</span>
+                <span>Cukup 55–79</span>
+                <span>Bagus ≥80</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3 Architectural Metrics Row (Hairline Divided, No Cluttered Pills) -->
+          <div class="grid grid-cols-3 divide-x divide-[#DCE5F0] bg-white">
+            <!-- Bahu -->
+            <div class="p-3 sm:p-3.5">
+              <div class="flex items-center gap-1.5">
+                <span id="dotShoulder" class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#A1BDD0]"></span>
+                <span class="text-[11px] font-medium text-[#596779]">Bahu</span>
+              </div>
+              <div id="metricShoulder" class="tnum mt-1.5 text-sm font-bold text-[#192641] sm:text-base">--°</div>
+              <p id="subShoulder" class="mt-0.5 text-[10.5px] text-[#596779] sm:text-[11px]">Batas ≤ 6.5°</p>
+            </div>
+
+            <!-- Leher -->
+            <div class="p-3 sm:p-3.5">
+              <div class="flex items-center gap-1.5">
+                <span id="dotNeck" class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#A1BDD0]"></span>
+                <span class="text-[11px] font-medium text-[#596779]">Leher</span>
+              </div>
+              <div id="metricNeckStatus" class="mt-1.5 text-xs font-bold leading-snug text-[#192641] sm:text-sm">--</div>
+              <p id="metricNeckSub" class="mt-0.5 text-[10.5px] text-[#596779] sm:text-[11px]">Belum diukur</p>
+            </div>
+
+            <!-- Jarak Layar -->
+            <div class="p-3 sm:p-3.5">
+              <div class="flex items-center gap-1.5">
+                <span id="dotDistance" class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#A1BDD0]"></span>
+                <span class="text-[11px] font-medium text-[#596779]">Jarak Layar</span>
+              </div>
+              <div id="metricDistanceStatus" class="mt-1.5 text-xs font-bold leading-snug text-[#192641] sm:text-sm">--</div>
+              <p id="metricDistanceSub" class="mt-0.5 text-[10.5px] text-[#596779] sm:text-[11px]">Belum diukur</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Waktu Duduk & Grafik Tren (Modern Clean Card) -->
+        <div class="surface-panel rounded-xl p-5">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-[#192641]">Waktu duduk</h2>
+            <button
+              id="btnResetTimer"
+              type="button"
+              class="text-xs font-medium text-[#596779] transition hover:text-[#192641]"
+            >
+              Reset
+            </button>
+          </div>
+
+          <div class="mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <span class="text-xs text-[#596779]">Duduk sehat</span>
+              <div id="timerHealthy" class="tnum mt-0.5 text-2xl font-bold tracking-tight text-[#192641]">00:00</div>
+            </div>
+            <div>
+              <span class="text-xs text-[#596779]">Kurang baik</span>
+              <div id="timerPoor" class="tnum mt-0.5 text-2xl font-bold tracking-tight text-[#192641]">00:00</div>
+            </div>
+          </div>
+
+          <!-- Slim Proportion Bar -->
+          <div class="mt-4 flex items-center gap-3">
+            <div class="flex h-1.5 flex-1 overflow-hidden rounded-full bg-[#EAEFF5]">
+              <div id="healthyRatioBar" class="smooth-bar h-full bg-emerald-500" style="width: 0%"></div>
+              <div id="poorRatioBar" class="smooth-bar h-full bg-rose-400" style="width: 0%"></div>
+            </div>
+            <span id="healthyPctLabel" class="tnum text-xs font-semibold text-[#192641]">0%</span>
+          </div>
+
+          <!-- Borderless Minimal Sparkline (No Nested Box) -->
+          <div class="mt-4 pt-3 border-t border-[#F0F4F8]">
+            <div class="mb-1 flex items-center justify-between text-[11px] text-[#596779]">
+              <span>Tren nilai</span>
+              <span id="trendAvgLabel" class="tnum font-medium text-[#192641]">Rata-rata --</span>
+            </div>
+            <svg id="liveTrendSvg" viewBox="0 0 320 54" class="h-[54px] w-full overflow-visible" role="img" aria-label="Grafik tren nilai postur sesi"></svg>
+          </div>
+        </div>
+
+        <!-- 3. Istirahat Mata (Clean Responsive Card) -->
+        <div class="surface-panel rounded-xl px-4 py-3.5 sm:px-5">
+          <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span id="eyeTimerDot" class="h-1.5 w-1.5 rounded-full bg-[#A1BDD0]"></span>
+                <h2 class="text-sm font-semibold text-[#192641]">Istirahat mata</h2>
+              </div>
+              <p id="eyeTimerSub" class="mt-0.5 truncate text-xs text-[#596779]">Tiap 20 mnt · jeda 20 dtk</p>
+            </div>
+            <div class="flex flex-shrink-0 items-center gap-1.5">
+              <span id="eyeTimerValue" class="tnum mr-1 text-lg font-bold tracking-tight text-[#192641]">20:00</span>
+              <button
+                id="btnPauseEyeTimer"
+                type="button"
+                class="inline-flex items-center gap-1 rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-2.5 py-1 text-xs font-medium text-[#192641] transition hover:border-[#A1BDD0] hover:bg-white"
+                title="Stop sementara atau lanjutkan hitung mundur"
+              >
+                Jeda
+              </button>
+              <button
+                id="btnResetEyeTimer"
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] text-[#596779] transition hover:border-[#A1BDD0] hover:bg-white hover:text-[#192641]"
+                title="Reset waktu ke awal"
+                aria-label="Reset waktu istirahat mata"
+              >
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+              </button>
+              <button
+                id="btnToggleEyeConfig"
+                type="button"
+                class="rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-2.5 py-1 text-xs font-medium text-[#192641] transition hover:border-[#A1BDD0] hover:bg-white"
+                title="Atur sendiri jadwal & lama istirahat mata"
+              >
+                Atur
+              </button>
+            </div>
+          </div>
+
+          <!-- Clean Expandable Settings Drawer -->
+          <div id="eyeConfigPanel" class="mt-3.5 hidden border-t border-[#EAEFF5] pt-3.5">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="inputEyeWorkMin" class="block text-[11px] font-medium text-[#596779]">Ingatkan tiap (menit)</label>
+                <input
+                  id="inputEyeWorkMin"
+                  type="number"
+                  min="1"
+                  max="180"
+                  value="20"
+                  class="tnum mt-1 w-full rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-2.5 py-1.5 text-xs font-semibold text-[#192641] outline-none focus:border-[#596779] focus:bg-white"
+                />
+              </div>
+              <div>
+                <label for="inputEyeRestSec" class="block text-[11px] font-medium text-[#596779]">Lama jeda (detik)</label>
+                <input
+                  id="inputEyeRestSec"
+                  type="number"
+                  min="5"
+                  max="300"
+                  value="20"
+                  class="tnum mt-1 w-full rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-2.5 py-1.5 text-xs font-semibold text-[#192641] outline-none focus:border-[#596779] focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5 text-[11px] text-[#596779]">
+                <span>Preset:</span>
+                <button type="button" data-eye-preset="10" class="eye-preset-btn rounded-md bg-[#F8F9FA] px-2 py-0.5 font-medium text-[#192641] ring-1 ring-[#DCE5F0] hover:ring-[#A1BDD0]">10m</button>
+                <button type="button" data-eye-preset="20" class="eye-preset-btn rounded-md bg-[#F8F9FA] px-2 py-0.5 font-medium text-[#192641] ring-1 ring-[#DCE5F0] hover:ring-[#A1BDD0]">20m</button>
+                <button type="button" data-eye-preset="30" class="eye-preset-btn rounded-md bg-[#F8F9FA] px-2 py-0.5 font-medium text-[#192641] ring-1 ring-[#DCE5F0] hover:ring-[#A1BDD0]">30m</button>
+                <button type="button" data-eye-preset="45" class="eye-preset-btn rounded-md bg-[#F8F9FA] px-2 py-0.5 font-medium text-[#192641] ring-1 ring-[#DCE5F0] hover:ring-[#A1BDD0]">45m</button>
+              </div>
+              <button
+                id="btnSaveEyeConfig"
+                type="button"
+                class="rounded-lg bg-[#192641] px-3.5 py-1.5 text-xs font-semibold text-[#F8F9FA] transition hover:bg-[#243456]"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Catatan Postur (Quiet & Clean) -->
+        <div class="surface-panel rounded-xl px-5 py-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-[#192641]">Catatan postur</h2>
+            <span id="issueCountBadge" class="text-xs font-medium text-[#596779]">Siap</span>
+          </div>
+
+          <div id="diagnosisList" class="mt-2.5 space-y-2.5">
+            <p class="text-xs leading-relaxed text-[#596779]">
+              Nyalakan kamera untuk melihat evaluasi posisi bahu, kepala, dan jarak pandang Anda.
+            </p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- PDF Report Preview & Print Modal                                          -->
+  <!-- ========================================================================= -->
+  <div
+    id="pdfPreviewModal"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-[#192641]/45 p-4 backdrop-blur-xs"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="pdfModalTitle"
+  >
+    <div class="w-full max-w-xl overflow-hidden rounded-xl border border-[#DCE5F0] bg-white shadow-xl">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-[#DCE5F0] px-5 py-4">
+        <div>
+          <h2 id="pdfModalTitle" class="text-sm font-bold text-[#192641]">Cetak Laporan Hasil ke PDF</h2>
+          <p class="mt-0.5 text-xs text-[#596779]">Ringkasan sesi pemantauan postur duduk &amp; kesehatan mata</p>
+        </div>
+        <button
+          id="btnClosePdfModal"
+          type="button"
+          class="rounded-lg p-1.5 text-[#596779] transition hover:bg-[#F8F9FA] hover:text-[#192641]"
+          aria-label="Tutup jendela laporan"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="max-h-[72vh] space-y-4 overflow-y-auto p-5">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label for="pdfUserNameInput" class="block text-xs font-semibold text-[#192641]">Nama di Laporan (Opsional)</label>
+            <input
+              id="pdfUserNameInput"
+              type="text"
+              placeholder="Contoh: Budi Santoso"
+              class="mt-1 w-full rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-3 py-2 text-xs text-[#192641] outline-none transition focus:border-[#596779] focus:bg-white"
+            />
+          </div>
+          <div>
+            <label for="pdfNoteInput" class="block text-xs font-semibold text-[#192641]">Catatan Sesi (Opsional)</label>
+            <input
+              id="pdfNoteInput"
+              type="text"
+              placeholder="Contoh: Kerja pagi di laptop"
+              class="mt-1 w-full rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-3 py-2 text-xs text-[#192641] outline-none transition focus:border-[#596779] focus:bg-white"
+            />
+          </div>
+        </div>
+
+        <!-- Clean Summary Preview -->
+        <div class="rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#DCE5F0] pb-3">
+            <p id="modalPreviewTimestamp" class="text-[11px] text-[#596779]">--</p>
+            <span id="modalPreviewVerdict" class="text-xs font-semibold text-[#192641]">Belum Ada Data</span>
+          </div>
+
+          <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div>
+              <p class="text-[11px] text-[#596779]">Rata-Rata Nilai</p>
+              <p id="modalAvgScore" class="tnum mt-0.5 text-lg font-bold text-[#192641]">--</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-[#596779]">Duduk Sehat</p>
+              <p id="modalHealthyTime" class="tnum mt-0.5 text-lg font-bold text-[#192641]">00:00</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-[#596779]">Kurang Baik</p>
+              <p id="modalPoorTime" class="tnum mt-0.5 text-lg font-bold text-[#192641]">00:00</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-[#596779]">Rasio Sehat</p>
+              <p id="modalHealthyPct" class="tnum mt-0.5 text-lg font-bold text-[#192641]">0%</p>
+            </div>
+          </div>
+
+          <p class="mt-3 border-t border-[#DCE5F0] pt-2.5 text-[11px] text-[#596779]">
+            Saat dialog cetak terbuka, pilih tujuan <strong class="text-[#192641]">Simpan sebagai PDF / Save as PDF</strong> untuk menyimpan laporan ini.
+          </p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-end gap-2 border-t border-[#DCE5F0] bg-[#F8F9FA] px-5 py-3.5">
+        <button
+          id="btnCancelPdfModal"
+          type="button"
+          class="rounded-lg border border-[#DCE5F0] bg-white px-3.5 py-2 text-xs font-semibold text-[#596779] transition hover:text-[#192641]"
+        >
+          Batal
+        </button>
+        <button
+          id="btnPrintPdfNow"
+          type="button"
+          class="inline-flex items-center gap-2 rounded-lg bg-[#192641] px-4 py-2 text-xs font-semibold text-[#F8F9FA] transition hover:bg-[#243456]"
+        >
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9" />
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+            <rect x="6" y="14" width="12" height="8" />
+          </svg>
+          <span>Cetak / Simpan PDF</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- Dedicated A4 Print / PDF Sheet (Visible Only When Printing to PDF)        -->
+  <!-- ========================================================================= -->
+  <section id="pdfPrintSheet" aria-hidden="true">
+    <!-- Top Winter Gradient Report Header -->
+    <div class="winter-score-surface rounded-xl p-6 text-[#F8F9FA]">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="winter-mesh flex h-10 w-10 items-center justify-center rounded-lg border border-white/25">
+            <svg class="h-5 w-5 text-[#F8F9FA]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight">ErgoVision</h1>
+            <p class="text-xs text-[#D2E0EE]">Laporan Hasil Pemantauan Postur Duduk &amp; Kesehatan Mata</p>
+          </div>
+        </div>
+        <div class="text-right text-xs text-[#D2E0EE]">
+          <p class="font-semibold text-[#F8F9FA]" id="pdfDateText">--</p>
+          <p id="pdfModeText">Patokan Standar</p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/15 pt-3 text-xs">
+        <div><span class="text-[#A1BDD0]">Nama:</span> <strong id="pdfUserName" class="text-[#F8F9FA]">Pengguna ErgoVision</strong></div>
+        <div id="pdfNoteRow" class="hidden"><span class="text-[#A1BDD0]">Catatan:</span> <strong id="pdfNoteText" class="text-[#F8F9FA]"></strong></div>
+        <div><span class="text-[#A1BDD0]">Istirahat Mata:</span> <strong id="pdfEyeBreaks" class="tnum text-[#F8F9FA]">0×</strong></div>
+        <div><span class="text-[#A1BDD0]">Total Durasi:</span> <strong id="pdfTotalDuration" class="tnum text-[#F8F9FA]">00:00</strong></div>
+      </div>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="mt-5 grid grid-cols-4 divide-x divide-[#DCE5F0] overflow-hidden rounded-xl border border-[#DCE5F0] bg-[#F8F9FA]">
+      <div class="p-4">
+        <p class="text-[11px] font-medium text-[#596779]">Rata-Rata Nilai</p>
+        <p id="pdfAvgScore" class="tnum mt-1 text-2xl font-bold text-[#192641]">--</p>
+        <p id="pdfScoreRange" class="mt-0.5 text-[11px] text-[#596779]">Min -- · Maks --</p>
+      </div>
+      <div class="p-4">
+        <p class="text-[11px] font-medium text-[#596779]">Duduk Sehat</p>
+        <p id="pdfHealthyDuration" class="tnum mt-1 text-2xl font-bold text-[#192641]">00:00</p>
+        <p id="pdfHealthyPct" class="mt-0.5 text-[11px] font-semibold text-emerald-700">0% dari total sesi</p>
+      </div>
+      <div class="p-4">
+        <p class="text-[11px] font-medium text-[#596779]">Kurang Baik</p>
+        <p id="pdfPoorDuration" class="tnum mt-1 text-2xl font-bold text-[#192641]">00:00</p>
+        <p id="pdfPoorPct" class="mt-0.5 text-[11px] font-semibold text-rose-700">0% dari total sesi</p>
+      </div>
+      <div class="p-4">
+        <p class="text-[11px] font-medium text-[#596779]">Rata-Rata Bahu</p>
+        <p id="pdfAvgTilt" class="tnum mt-1 text-2xl font-bold text-[#192641]">--°</p>
+        <p class="mt-0.5 text-[11px] text-[#596779]">Batas lurus ≤ 6.5°</p>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="mt-5 rounded-xl border border-[#DCE5F0] bg-[#F8F9FA] p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-[#596779]">Kesimpulan Sesi</h2>
+        <span id="pdfVerdictBadge" class="text-xs font-bold text-[#192641]">--</span>
+      </div>
+      <p id="pdfSummaryParagraph" class="mt-2 text-xs leading-relaxed text-[#192641]">--</p>
+    </div>
+
+    <!-- Vector Posture Score Trend Chart (Printed Crisp in A4 PDF) -->
+    <div class="mt-5 rounded-xl border border-[#DCE5F0] bg-white p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-[#596779]">Grafik Tren Nilai Postur Sesi</h2>
+        <span class="text-[11px] text-[#596779]">Garis putus-putus: batas postur ideal (80)</span>
+      </div>
+      <div class="mt-2.5">
+        <svg id="pdfTrendSvg" viewBox="0 0 640 132" class="h-[132px] w-full"></svg>
+      </div>
+    </div>
+
+    <!-- Breakdown Table -->
+    <div class="mt-5">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-[#596779]">Rincian Aspek Postur</h2>
+      <table class="mt-2 w-full border-collapse overflow-hidden rounded-xl border border-[#DCE5F0] text-left text-xs">
+        <thead>
+          <tr class="bg-[#192641] text-[#F8F9FA]">
+            <th class="px-4 py-2.5 font-semibold">Aspek</th>
+            <th class="px-4 py-2.5 font-semibold">Durasi Bermasalah</th>
+            <th class="px-4 py-2.5 font-semibold">Status</th>
+            <th class="px-4 py-2.5 font-semibold">Keterangan</th>
+          </tr>
+        </thead>
+        <tbody id="pdfBreakdownRows" class="divide-y divide-[#DCE5F0] bg-white"></tbody>
+      </table>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="mt-5 rounded-xl border border-[#DCE5F0] bg-white p-4">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-[#596779]">Saran untuk Sesi Berikutnya</h2>
+      <ul id="pdfRecommendationList" class="mt-2.5 list-disc space-y-1.5 pl-5 text-xs leading-relaxed text-[#192641]"></ul>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-6 flex items-center justify-between border-t border-[#DCE5F0] pt-3 text-[10px] text-[#596779]">
+      <span>ErgoVision · Laporan Pemantauan Postur Duduk &amp; Kesehatan Mata</span>
+      <span>Tidak ada foto atau rekaman video yang disimpan.</span>
+    </div>
+  </section>
+
+  <script type="module">
+    import {
+      FilesetResolver,
+      PoseLandmarker,
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
+
+    (() => {
+      // =======================================================================
+      // Configuration & State
+      // =======================================================================
+      const DEFAULT_NECK = 0.58;
+      const DEFAULT_FACE = 0.11;
+      const IDEAL_SHOULDER_TILT_MAX = 6.5;
+      const NECK_DROP_THRESHOLD = 0.18;
+      const FACE_INCREASE_THRESHOLD = 0.25;
+      const SHOULDER_TO_EYE_SCALE = 0.26;
+      const LANDMARK_VIS_THRESHOLD = 0.40;
+      const AI_INTERVAL_MS = 70; // ~14 Hz pose analysis in browser (zero network latency)
+      const MEDIAPIPE_WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
+      const MEDIAPIPE_MODEL_URL =
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+      const CHIME_HOLD_MS = 3000;
+      const DEFAULT_EYE_WORK_MIN = 20;      // Default 20 minutes
+      const DEFAULT_EYE_REST_SEC = 20;      // Default 20 seconds
+      const TREND_SAMPLE_MS = 3000;         // Record 1 chart point every 3s
+      const MAX_TREND_POINTS = 160;
+      const NOTIF_COOLDOWN_MS = 25000;
+      const STORAGE_CALIB_KEY = "ergovision_calibration_v1";
+      const STORAGE_NOTIF_KEY = "ergovision_notif_v1";
+      const STORAGE_EYE_KEY = "ergovision_eye_timer_v1";
+
+      const state = {
+        isRunning: false,
+        isMuted: false,
+        desktopNotifEnabled: false,
+        lastDesktopNotifTs: 0,
+        stream: null,
+        loopTimer: null,
+        rafId: null,
+        eyeIntervalId: null,
+        poseLandmarker: null,
+        modelPromise: null,
+        lastVideoTime: -1,
+        lastAiRunTs: 0,
+        baselineNeck: null,
+        baselineFace: null,
+        lastMetrics: null,
+        healthyMs: 0,
+        poorMs: 0,
+        lastTickTs: null,
+        badPostureStartTs: null,
+        chimePlayedForEpisode: false,
+        audioCtx: null,
+        targetPose: null,
+        smoothPose: null,
+        poseStatus: "ideal",
+        lastRenderTs: null,
+        renderTimestamps: [],
+        aiTimestamps: [],
+        sessionStartedAt: null,
+        samplesCount: 0,
+        scoreSum: 0,
+        minScore: null,
+        maxScore: null,
+        tiltSum: 0,
+        issueDurationMs: {
+          tech_neck: 0,
+          eye_strain: 0,
+          shoulder_tilt: 0,
+        },
+        // Score trend history for live & PDF SVG chart
+        scoreHistory: [],
+        lastTrendSampleTs: 0,
+        // Customizable Eye Break Timer state
+        eyeWorkMinutes: DEFAULT_EYE_WORK_MIN,
+        eyeRestSeconds: DEFAULT_EYE_REST_SEC,
+        eyeWorkRemainingMs: DEFAULT_EYE_WORK_MIN * 60 * 1000,
+        eyeTimerPaused: false,
+        eyeRestActive: false,
+        eyeRestRemainingMs: DEFAULT_EYE_REST_SEC * 1000,
+        eyeBreaksCompleted: 0,
+      };
+
+      // =======================================================================
+      // DOM References
+      // =======================================================================
+      const el = {
+        video: document.getElementById("webcamVideo"),
+        canvas: document.getElementById("captureCanvas"),
+        overlayCanvas: document.getElementById("overlayCanvas"),
+        idleOverlay: document.getElementById("idleOverlay"),
+        eyeBreakOverlay: document.getElementById("eyeBreakOverlay"),
+        eyeRestCountdown: document.getElementById("eyeRestCountdown"),
+        eyeRestGuideText: document.getElementById("eyeRestGuideText"),
+        eyeRestBar: document.getElementById("eyeRestBar"),
+        btnSkipEyeBreak: document.getElementById("btnSkipEyeBreak"),
+        btnStartOverlay: document.getElementById("btnStartOverlay"),
+        btnCameraToggle: document.getElementById("btnCameraToggle"),
+        btnCameraLabel: document.getElementById("btnCameraLabel"),
+        iconCameraStart: document.getElementById("iconCameraStart"),
+        iconCameraStop: document.getElementById("iconCameraStop"),
+        btnCalibrate: document.getElementById("btnCalibrate"),
+        btnResetCalibration: document.getElementById("btnResetCalibration"),
+        baselineSummary: document.getElementById("baselineSummary"),
+        baselineSummaryWrap: document.getElementById("baselineSummaryWrap"),
+        btnToggleAudio: document.getElementById("btnToggleAudio"),
+        audioIconOn: document.getElementById("audioIconOn"),
+        audioIconOff: document.getElementById("audioIconOff"),
+        audioLabel: document.getElementById("audioLabel"),
+        btnToggleNotif: document.getElementById("btnToggleNotif"),
+        notifLabel: document.getElementById("notifLabel"),
+        notifDot: document.getElementById("notifDot"),
+        headerLiveDot: document.getElementById("headerLiveDot"),
+        headerLiveText: document.getElementById("headerLiveText"),
+        viewportLiveBadge: document.getElementById("viewportLiveBadge"),
+        fpsCounter: document.getElementById("fpsCounter"),
+        calibrationBadge: document.getElementById("calibrationBadge"),
+        calibrationDot: document.getElementById("calibrationDot"),
+        calibrationBadgeText: document.getElementById("calibrationBadgeText"),
+        floatingAlert: document.getElementById("floatingAlert"),
+        floatingAlertBox: document.getElementById("floatingAlertBox"),
+        floatingAlertIcon: document.getElementById("floatingAlertIcon"),
+        floatingAlertTitle: document.getElementById("floatingAlertTitle"),
+        floatingAlertDetail: document.getElementById("floatingAlertDetail"),
+        chimeHoldWrap: document.getElementById("chimeHoldWrap"),
+        chimeHoldText: document.getElementById("chimeHoldText"),
+        cameraErrorBox: document.getElementById("cameraErrorBox"),
+        cameraErrorText: document.getElementById("cameraErrorText"),
+        scoreValue: document.getElementById("scoreValue"),
+        statusPill: document.getElementById("statusPill"),
+        statusDot: document.getElementById("statusDot"),
+        statusLabel: document.getElementById("statusLabel"),
+        scoreProgressBar: document.getElementById("scoreProgressBar"),
+        metricShoulder: document.getElementById("metricShoulder"),
+        dotShoulder: document.getElementById("dotShoulder"),
+        subShoulder: document.getElementById("subShoulder"),
+        metricNeckStatus: document.getElementById("metricNeckStatus"),
+        metricNeckSub: document.getElementById("metricNeckSub"),
+        dotNeck: document.getElementById("dotNeck"),
+        metricDistanceStatus: document.getElementById("metricDistanceStatus"),
+        metricDistanceSub: document.getElementById("metricDistanceSub"),
+        dotDistance: document.getElementById("dotDistance"),
+        timerHealthy: document.getElementById("timerHealthy"),
+        timerPoor: document.getElementById("timerPoor"),
+        healthyPctLabel: document.getElementById("healthyPctLabel"),
+        healthyRatioBar: document.getElementById("healthyRatioBar"),
+        poorRatioBar: document.getElementById("poorRatioBar"),
+        trendAvgLabel: document.getElementById("trendAvgLabel"),
+        liveTrendSvg: document.getElementById("liveTrendSvg"),
+        eyeTimerDot: document.getElementById("eyeTimerDot"),
+        eyeTimerSub: document.getElementById("eyeTimerSub"),
+        eyeTimerValue: document.getElementById("eyeTimerValue"),
+        btnToggleEyeConfig: document.getElementById("btnToggleEyeConfig"),
+        eyeConfigPanel: document.getElementById("eyeConfigPanel"),
+        inputEyeWorkMin: document.getElementById("inputEyeWorkMin"),
+        inputEyeRestSec: document.getElementById("inputEyeRestSec"),
+        btnSaveEyeConfig: document.getElementById("btnSaveEyeConfig"),
+        btnPauseEyeTimer: document.getElementById("btnPauseEyeTimer"),
+        btnResetEyeTimer: document.getElementById("btnResetEyeTimer"),
+        btnResetTimer: document.getElementById("btnResetTimer"),
+        diagnosisList: document.getElementById("diagnosisList"),
+        issueCountBadge: document.getElementById("issueCountBadge"),
+        toastContainer: document.getElementById("toastContainer"),
+        btnOpenPdfHeader: document.getElementById("btnOpenPdfHeader"),
+        pdfPreviewModal: document.getElementById("pdfPreviewModal"),
+        btnClosePdfModal: document.getElementById("btnClosePdfModal"),
+        btnCancelPdfModal: document.getElementById("btnCancelPdfModal"),
+        btnPrintPdfNow: document.getElementById("btnPrintPdfNow"),
+        pdfUserNameInput: document.getElementById("pdfUserNameInput"),
+        pdfNoteInput: document.getElementById("pdfNoteInput"),
+        modalPreviewTimestamp: document.getElementById("modalPreviewTimestamp"),
+        modalPreviewVerdict: document.getElementById("modalPreviewVerdict"),
+        modalAvgScore: document.getElementById("modalAvgScore"),
+        modalHealthyTime: document.getElementById("modalHealthyTime"),
+        modalPoorTime: document.getElementById("modalPoorTime"),
+        modalHealthyPct: document.getElementById("modalHealthyPct"),
+        pdfDateText: document.getElementById("pdfDateText"),
+        pdfModeText: document.getElementById("pdfModeText"),
+        pdfUserName: document.getElementById("pdfUserName"),
+        pdfNoteRow: document.getElementById("pdfNoteRow"),
+        pdfNoteText: document.getElementById("pdfNoteText"),
+        pdfEyeBreaks: document.getElementById("pdfEyeBreaks"),
+        pdfTotalDuration: document.getElementById("pdfTotalDuration"),
+        pdfAvgScore: document.getElementById("pdfAvgScore"),
+        pdfScoreRange: document.getElementById("pdfScoreRange"),
+        pdfHealthyDuration: document.getElementById("pdfHealthyDuration"),
+        pdfHealthyPct: document.getElementById("pdfHealthyPct"),
+        pdfPoorDuration: document.getElementById("pdfPoorDuration"),
+        pdfPoorPct: document.getElementById("pdfPoorPct"),
+        pdfAvgTilt: document.getElementById("pdfAvgTilt"),
+        pdfVerdictBadge: document.getElementById("pdfVerdictBadge"),
+        pdfSummaryParagraph: document.getElementById("pdfSummaryParagraph"),
+        pdfTrendSvg: document.getElementById("pdfTrendSvg"),
+        pdfBreakdownRows: document.getElementById("pdfBreakdownRows"),
+        pdfRecommendationList: document.getElementById("pdfRecommendationList"),
+      };
+
+      // =======================================================================
+      // Helpers
+      // =======================================================================
+      function formatDuration(ms) {
+        const totalSec = Math.floor(ms / 1000);
+        const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
+        const secs = String(totalSec % 60).padStart(2, "0");
+        return `${mins}:${secs}`;
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function showToast(message) {
+        const toast = document.createElement("div");
+        toast.className =
+          "pointer-events-auto rounded-lg border border-[#DCE5F0] bg-[#192641] px-3.5 py-2.5 text-xs font-medium text-[#F8F9FA] shadow-lg transition-all duration-200";
+        toast.textContent = message;
+        el.toastContainer.appendChild(toast);
+        setTimeout(() => {
+          toast.style.opacity = "0";
+          toast.style.transform = "translateY(6px)";
+          setTimeout(() => toast.remove(), 220);
+        }, 2800);
+      }
+
+      function showCameraError(msg) {
+        if (!msg) {
+          el.cameraErrorBox.classList.add("hidden");
+          el.cameraErrorBox.classList.remove("flex");
+          return;
+        }
+        el.cameraErrorText.textContent = msg;
+        el.cameraErrorBox.classList.remove("hidden");
+        el.cameraErrorBox.classList.add("flex");
+      }
+
+      function setDotTone(dotEl, tone) {
+        const tones = {
+          ideal: "bg-emerald-500",
+          warning: "bg-amber-500",
+          poor: "bg-rose-500",
+          neutral: "bg-[#A1BDD0]",
+        };
+        dotEl.className = `h-1.5 w-1.5 rounded-full ${tones[tone] || tones.neutral}`;
+      }
+
+      // =======================================================================
+      // Web Audio API — Gentle Ambient Chime
+      // =======================================================================
+      function ensureAudioContext() {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        if (!state.audioCtx) state.audioCtx = new AudioCtx();
+        if (state.audioCtx.state === "suspended") state.audioCtx.resume().catch(() => {});
+        return state.audioCtx;
+      }
+
+      function playAmbientChime() {
+        if (state.isMuted) return;
+        const ctx = ensureAudioContext();
+        if (!ctx) return;
+
+        const now = ctx.currentTime;
+        const notes = [
+          { freq: 523.25, start: 0.0, duration: 1.0, gain: 0.10 },
+          { freq: 659.25, start: 0.16, duration: 1.1, gain: 0.08 },
+          { freq: 783.99, start: 0.32, duration: 1.2, gain: 0.07 },
+        ];
+
+        notes.forEach(({ freq, start, duration, gain }) => {
+          const osc = ctx.createOscillator();
+          const amp = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + start);
+          amp.gain.setValueAtTime(0.0001, now + start);
+          amp.gain.linearRampToValueAtTime(gain, now + start + 0.04);
+          amp.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+          osc.connect(amp);
+          amp.connect(ctx.destination);
+          osc.start(now + start);
+          osc.stop(now + start + duration + 0.05);
+        });
+      }
+
+      function playRelaxingChime() {
+        if (state.isMuted) return;
+        const ctx = ensureAudioContext();
+        if (!ctx) return;
+
+        const now = ctx.currentTime;
+        const notes = [
+          { freq: 659.25, start: 0.0, duration: 1.2, gain: 0.08 },
+          { freq: 523.25, start: 0.22, duration: 1.4, gain: 0.07 },
+        ];
+        notes.forEach(({ freq, start, duration, gain }) => {
+          const osc = ctx.createOscillator();
+          const amp = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + start);
+          amp.gain.setValueAtTime(0.0001, now + start);
+          amp.gain.linearRampToValueAtTime(gain, now + start + 0.06);
+          amp.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+          osc.connect(amp);
+          amp.connect(ctx.destination);
+          osc.start(now + start);
+          osc.stop(now + start + duration + 0.05);
+        });
+      }
+
+      // =======================================================================
+      // LocalStorage Persistence (Calibration & Notification Preference)
+      // =======================================================================
+      function saveCalibrationToStorage(neck, face) {
+        try {
+          localStorage.setItem(
+            STORAGE_CALIB_KEY,
+            JSON.stringify({ neck_ratio: neck, face_ratio: face, savedAt: Date.now() })
+          );
+        } catch (_) {}
+      }
+
+      function clearCalibrationStorage() {
+        try {
+          localStorage.removeItem(STORAGE_CALIB_KEY);
+        } catch (_) {}
+      }
+
+      function loadSavedPreferences() {
+        try {
+          const rawCalib = localStorage.getItem(STORAGE_CALIB_KEY);
+          if (rawCalib) {
+            const parsed = JSON.parse(rawCalib);
+            const n = Number(parsed?.neck_ratio);
+            const f = Number(parsed?.face_ratio);
+            if (Number.isFinite(n) && n >= 0.15 && n <= 1.6 && Number.isFinite(f) && f >= 0.03 && f <= 0.5) {
+              state.baselineNeck = n;
+              state.baselineFace = f;
+            }
+          }
+          const rawNotif = localStorage.getItem(STORAGE_NOTIF_KEY);
+          if (rawNotif === "on" && "Notification" in window && Notification.permission === "granted") {
+            state.desktopNotifEnabled = true;
+          }
+          const rawEye = localStorage.getItem(STORAGE_EYE_KEY);
+          if (rawEye) {
+            const parsedEye = JSON.parse(rawEye);
+            const wm = Math.round(Number(parsedEye?.workMin));
+            const rs = Math.round(Number(parsedEye?.restSec));
+            if (Number.isFinite(wm) && wm >= 1 && wm <= 180) {
+              state.eyeWorkMinutes = wm;
+              state.eyeWorkRemainingMs = wm * 60 * 1000;
+            }
+            if (Number.isFinite(rs) && rs >= 5 && rs <= 300) {
+              state.eyeRestSeconds = rs;
+              state.eyeRestRemainingMs = rs * 1000;
+            }
+          }
+        } catch (_) {}
+        el.inputEyeWorkMin.value = String(state.eyeWorkMinutes);
+        el.inputEyeRestSec.value = String(state.eyeRestSeconds);
+      }
+
+      function saveEyeConfigToStorage(workMin, restSec) {
+        try {
+          localStorage.setItem(STORAGE_EYE_KEY, JSON.stringify({ workMin, restSec }));
+        } catch (_) {}
+      }
+
+      // =======================================================================
+      // Desktop Notifications (for Background Tabs / Other Apps)
+      // =======================================================================
+      function updateNotifUI() {
+        el.btnToggleNotif.setAttribute("aria-pressed", String(state.desktopNotifEnabled));
+        if (state.desktopNotifEnabled) {
+          el.notifLabel.textContent = "Notif Aktif";
+          el.notifDot.classList.remove("hidden");
+        } else {
+          el.notifLabel.textContent = "Notifikasi";
+          el.notifDot.classList.add("hidden");
+        }
+      }
+
+      async function toggleDesktopNotif() {
+        if (!("Notification" in window)) {
+          showToast("Browser ini belum mendukung notifikasi desktop.");
+          return;
+        }
+        if (state.desktopNotifEnabled) {
+          state.desktopNotifEnabled = false;
+          try { localStorage.setItem(STORAGE_NOTIF_KEY, "off"); } catch (_) {}
+          updateNotifUI();
+          showToast("Notifikasi layar dimatikan.");
+          return;
+        }
+        let perm = Notification.permission;
+        if (perm === "default") {
+          perm = await Notification.requestPermission();
+        }
+        if (perm === "granted") {
+          state.desktopNotifEnabled = true;
+          try { localStorage.setItem(STORAGE_NOTIF_KEY, "on"); } catch (_) {}
+          updateNotifUI();
+          showToast("Notifikasi aktif. Anda tetap diingatkan meski membuka tab lain.");
+        } else {
+          showToast("Izin notifikasi ditolak. Aktifkan lewat ikon gembok/pengaturan browser.");
+        }
+      }
+
+      function sendDesktopNotification(title, body, force = false) {
+        if (!state.desktopNotifEnabled || !("Notification" in window) || Notification.permission !== "granted") {
+          return;
+        }
+        const now = Date.now();
+        if (!force && (!document.hidden || now - state.lastDesktopNotifTs < NOTIF_COOLDOWN_MS)) {
+          return;
+        }
+        state.lastDesktopNotifTs = now;
+        try {
+          new Notification(title, { body, silent: state.isMuted });
+        } catch (_) {}
+      }
+
+      // =======================================================================
+      // Customizable Eye Break Countdown & Rest Overlay
+      // =======================================================================
+      function updateEyeTimerUI() {
+        const totalRestMs = state.eyeRestSeconds * 1000;
+        if (state.eyeRestActive) {
+          const secLeft = Math.max(0, Math.ceil(state.eyeRestRemainingMs / 1000));
+          el.eyeTimerValue.textContent = formatDuration(secLeft * 1000);
+          el.eyeTimerSub.textContent = "Sedang istirahat mata (lihat objek jauh)";
+          el.eyeTimerDot.className = "h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-calm";
+          el.eyeRestCountdown.textContent = String(secLeft);
+          el.eyeRestGuideText.textContent = `Alihkan pandangan Anda ke objek jauh (±6 meter) dan berkedip pelan selama ${state.eyeRestSeconds} detik agar otot mata rileks.`;
+          const pct = Math.max(0, Math.min(100, (state.eyeRestRemainingMs / Math.max(1000, totalRestMs)) * 100));
+          el.eyeRestBar.style.width = `${pct}%`;
+          return;
+        }
+
+        el.eyeTimerValue.textContent = formatDuration(state.eyeWorkRemainingMs);
+        const scheduleLabel = `Tiap ${state.eyeWorkMinutes} mnt · istirahat ${state.eyeRestSeconds} dtk`;
+
+        if (state.eyeTimerPaused) {
+          el.eyeTimerDot.className = "h-1.5 w-1.5 rounded-full bg-amber-400";
+          el.eyeTimerSub.textContent = `Dijeda · ${scheduleLabel}`;
+          el.btnPauseEyeTimer.textContent = "Lanjut";
+          el.btnPauseEyeTimer.className =
+            "rounded-lg bg-[#192641] px-2.5 py-1 text-xs font-medium text-[#F8F9FA] transition hover:bg-[#243456]";
+          return;
+        }
+
+        el.btnPauseEyeTimer.textContent = "Jeda";
+        el.btnPauseEyeTimer.className =
+          "rounded-lg border border-[#DCE5F0] bg-[#F8F9FA] px-2.5 py-1 text-xs font-medium text-[#192641] transition hover:border-[#A1BDD0] hover:bg-white";
+
+        if (state.isRunning) {
+          el.eyeTimerDot.className = "h-1.5 w-1.5 rounded-full bg-[#192641]";
+          el.eyeTimerSub.textContent =
+            state.eyeBreaksCompleted > 0
+              ? `${scheduleLabel} · ${state.eyeBreaksCompleted}× selesai`
+              : scheduleLabel;
+        } else {
+          el.eyeTimerDot.className = "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]";
+          el.eyeTimerSub.textContent = scheduleLabel;
+        }
+      }
+
+      function startEyeRest() {
+        state.eyeRestActive = true;
+        state.eyeRestRemainingMs = state.eyeRestSeconds * 1000;
+        el.eyeBreakOverlay.classList.remove("hidden");
+        el.eyeBreakOverlay.classList.add("flex");
+        playRelaxingChime();
+        sendDesktopNotification(
+          "ErgoVision — Waktunya Istirahat Mata",
+          `Alihkan pandangan ke objek jauh (±6 meter) selama ${state.eyeRestSeconds} detik agar mata tetap segar.`,
+          document.hidden
+        );
+        updateEyeTimerUI();
+      }
+
+      function finishEyeRest(skipped = false) {
+        state.eyeRestActive = false;
+        state.eyeWorkRemainingMs = state.eyeWorkMinutes * 60 * 1000;
+        state.eyeRestRemainingMs = state.eyeRestSeconds * 1000;
+        el.eyeBreakOverlay.classList.add("hidden");
+        el.eyeBreakOverlay.classList.remove("flex");
+        if (!skipped) {
+          state.eyeBreaksCompleted += 1;
+          playRelaxingChime();
+          showToast(`Istirahat mata selesai! Hitung mundur ${state.eyeWorkMinutes} menit dimulai lagi.`);
+        } else {
+          showToast(`Jeda mata dilewati. Hitung mundur diulang ke ${state.eyeWorkMinutes} menit.`);
+        }
+        updateEyeTimerUI();
+      }
+
+      function startEyeTimerLoop() {
+        if (state.eyeIntervalId) clearInterval(state.eyeIntervalId);
+        state.eyeIntervalId = setInterval(() => {
+          if (state.eyeRestActive) {
+            state.eyeRestRemainingMs -= 1000;
+            if (state.eyeRestRemainingMs <= 0) {
+              finishEyeRest(false);
+            } else {
+              updateEyeTimerUI();
+            }
+            return;
+          }
+          if (!state.isRunning || state.eyeTimerPaused) return;
+          state.eyeWorkRemainingMs = Math.max(0, state.eyeWorkRemainingMs - 1000);
+          if (state.eyeWorkRemainingMs <= 0) {
+            startEyeRest();
+          } else {
+            updateEyeTimerUI();
+          }
+        }, 1000);
+      }
+
+      // =======================================================================
+      // Vector SVG Posture Score Trend Chart (Live Dashboard & A4 PDF)
+      // =======================================================================
+      function renderTrendChart(svgEl, points, isPdf = false) {
+        if (!svgEl) return;
+        const W = isPdf ? 640 : 320;
+        const H = isPdf ? 132 : 54;
+        const padL = isPdf ? 34 : 18;
+        const padR = isPdf ? 14 : 6;
+        const padT = isPdf ? 12 : 6;
+        const padB = isPdf ? 22 : 6;
+        const plotW = W - padL - padR;
+        const plotH = H - padT - padB;
+        const gradId = isPdf ? "pdfTrendGrad" : "liveTrendGrad";
+
+        const yFor = (score) => padT + plotH * (1 - Math.max(0, Math.min(100, score)) / 100);
+
+        if (!points || points.length === 0) {
+          if (isPdf) {
+            svgEl.innerHTML = `<text x="${W / 2}" y="${H / 2 + 4}" text-anchor="middle" fill="#596779" font-size="11.5">Belum ada rekaman tren skor pada sesi ini.</text>`;
+          } else {
+            const yMid = (padT + plotH * 0.5).toFixed(1);
+            svgEl.innerHTML = `
+              <line x1="${padL}" y1="${yMid}" x2="${W - padR}" y2="${yMid}" stroke="#E5ECF4" stroke-width="1" stroke-dasharray="3 3" />
+              <text x="${W / 2}" y="${(Number(yMid) - 6).toFixed(1)}" text-anchor="middle" fill="#94A3B8" font-size="10">Menunggu kamera aktif</text>
+            `;
+          }
+          return;
+        }
+
+        const y80 = yFor(80);
+        const y55 = yFor(55);
+
+        const coords = points.map((pt, idx) => {
+          const x =
+            points.length === 1
+              ? padL + plotW / 2
+              : padL + (idx / (points.length - 1)) * plotW;
+          return { x, y: yFor(pt.score), score: pt.score, elapsedSec: pt.elapsedSec };
+        });
+
+        const linePath = coords
+          .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+          .join(" ");
+
+        const areaPath =
+          coords.length > 1
+            ? `${linePath} L${coords[coords.length - 1].x.toFixed(1)},${(padT + plotH).toFixed(1)} L${coords[0].x.toFixed(1)},${(padT + plotH).toFixed(1)} Z`
+            : "";
+
+        const last = coords[coords.length - 1];
+        const dotColor = last.score >= 80 ? "#10B981" : last.score >= 55 ? "#F59E0B" : "#F43F5E";
+
+        const yLabels = isPdf
+          ? `
+            <text x="${padL - 6}" y="${(yFor(100) + 3).toFixed(1)}" text-anchor="end" fill="#596779" font-size="9.5">100</text>
+            <text x="${padL - 6}" y="${(y80 + 3).toFixed(1)}" text-anchor="end" fill="#192641" font-size="9.5" font-weight="600">80</text>
+            <text x="${padL - 6}" y="${(y55 + 3).toFixed(1)}" text-anchor="end" fill="#596779" font-size="9.5">55</text>
+            <text x="${padL - 6}" y="${(yFor(0) + 3).toFixed(1)}" text-anchor="end" fill="#596779" font-size="9.5">0</text>
+            <line x1="${padL}" y1="${y55.toFixed(1)}" x2="${W - padR}" y2="${y55.toFixed(1)}" stroke="#E5ECF4" stroke-width="1" />
+            <line x1="${padL}" y1="${(padT + plotH).toFixed(1)}" x2="${W - padR}" y2="${(padT + plotH).toFixed(1)}" stroke="#DCE5F0" stroke-width="1" />
+            <text x="${padL}" y="${H - 5}" text-anchor="start" fill="#596779" font-size="9.5">00:00</text>
+            <text x="${(padL + plotW / 2).toFixed(1)}" y="${H - 5}" text-anchor="middle" fill="#596779" font-size="9.5">${formatDuration((last.elapsedSec * 1000) / 2)}</text>
+            <text x="${W - padR}" y="${H - 5}" text-anchor="end" fill="#596779" font-size="9.5">${formatDuration(last.elapsedSec * 1000)}</text>
+          `
+          : `
+            <text x="${padL - 4}" y="${(y80 + 3).toFixed(1)}" text-anchor="end" fill="#596779" font-size="8.5">80</text>
+            <line x1="${padL}" y1="${(padT + plotH).toFixed(1)}" x2="${W - padR}" y2="${(padT + plotH).toFixed(1)}" stroke="#E5ECF4" stroke-width="1" />
+          `;
+
+        svgEl.innerHTML = `
+          <defs>
+            <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#A1BDD0" stop-opacity="0.42" />
+              <stop offset="100%" stop-color="#D2E0EE" stop-opacity="0.02" />
+            </linearGradient>
+          </defs>
+          ${yLabels}
+          <line x1="${padL}" y1="${y80.toFixed(1)}" x2="${W - padR}" y2="${y80.toFixed(1)}" stroke="#A1BDD0" stroke-width="1" stroke-dasharray="4 3" />
+          ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})" />` : ""}
+          ${coords.length > 1 ? `<path d="${linePath}" fill="none" stroke="#192641" stroke-width="${isPdf ? 2.2 : 1.75}" stroke-linecap="round" stroke-linejoin="round" />` : ""}
+          <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="${isPdf ? 4 : 3.2}" fill="${dotColor}" stroke="#FFFFFF" stroke-width="1.5" />
+        `;
+      }
+
+      // =======================================================================
+      // UI State Updaters
+      // =======================================================================
+      function updateBaselineUI() {
+        const neck = state.baselineNeck ?? DEFAULT_NECK;
+        const face = state.baselineFace ?? DEFAULT_FACE;
+        const isPersonal = state.baselineNeck !== null && state.baselineFace !== null;
+
+        el.baselineSummaryWrap.title = `Tinggi leher: ${neck.toFixed(2)} · Jarak layar: ${face.toFixed(2)}`;
+        if (isPersonal) {
+          el.baselineSummary.textContent = "Pribadi Aktif";
+          el.btnResetCalibration.classList.remove("hidden");
+          el.calibrationBadgeText.textContent = "Patokan Pribadi";
+          el.calibrationDot.className = "h-1.5 w-1.5 rounded-full bg-emerald-400";
+        } else {
+          el.baselineSummary.textContent = "Standar";
+          el.btnResetCalibration.classList.add("hidden");
+          el.calibrationBadgeText.textContent = "Patokan Standar";
+          el.calibrationDot.className = "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]";
+        }
+      }
+
+      function updateTimersUI() {
+        el.timerHealthy.textContent = formatDuration(state.healthyMs);
+        el.timerPoor.textContent = formatDuration(state.poorMs);
+
+        const total = state.healthyMs + state.poorMs;
+        if (total <= 0) {
+          el.healthyPctLabel.textContent = "0%";
+          el.healthyRatioBar.style.width = "0%";
+          el.poorRatioBar.style.width = "0%";
+          return;
+        }
+        const healthyPct = Math.round((state.healthyMs / total) * 100);
+        const poorPct = 100 - healthyPct;
+        el.healthyPctLabel.textContent = `${healthyPct}%`;
+        el.healthyRatioBar.style.width = `${healthyPct}%`;
+        el.poorRatioBar.style.width = `${poorPct}%`;
+      }
+
+      function showFloatingAlert(visible, tone, title, detail, holdMs = 0) {
+        if (!visible) {
+          el.floatingAlert.classList.add("opacity-0", "translate-y-2");
+          setTimeout(() => {
+            if (el.floatingAlert.classList.contains("opacity-0")) {
+              el.floatingAlert.classList.add("hidden");
+            }
+          }, 200);
+          return;
+        }
+
+        const styles = {
+          poor: "border-rose-400/40 bg-[#192641]/90 text-[#F8F9FA]",
+          warning: "border-amber-400/40 bg-[#192641]/88 text-[#F8F9FA]",
+          info: "border-white/20 bg-[#192641]/85 text-[#F8F9FA]",
+        };
+
+        el.floatingAlertBox.className = `flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 shadow-md backdrop-blur-md ${styles[tone] || styles.info}`;
+        el.floatingAlertTitle.textContent = title;
+        el.floatingAlertDetail.textContent = detail;
+
+        const dotColor = tone === "poor" ? "bg-rose-400" : tone === "warning" ? "bg-amber-400" : "bg-[#A1BDD0]";
+        el.floatingAlertIcon.innerHTML = `<span class="mt-1 block h-2 w-2 rounded-full ${dotColor}"></span>`;
+
+        if (holdMs > 0 && tone !== "info") {
+          el.chimeHoldWrap.classList.remove("hidden");
+          el.chimeHoldText.textContent = state.chimePlayedForEpisode
+            ? "Bunyi aktif"
+            : `${Math.min(holdMs / 1000, 3.0).toFixed(1)} dtk`;
+        } else {
+          el.chimeHoldWrap.classList.add("hidden");
+        }
+
+        el.floatingAlert.classList.remove("hidden");
+        requestAnimationFrame(() => {
+          el.floatingAlert.classList.remove("opacity-0", "translate-y-2");
+        });
+      }
+
+      function renderDiagnosis(detected, status, issues) {
+        if (!detected) {
+          el.issueCountBadge.className = "text-[11px] font-semibold text-[#596779]";
+          el.issueCountBadge.textContent = "Posisikan tubuh";
+          el.diagnosisList.innerHTML = `
+            <p class="text-xs leading-relaxed text-[#596779]">
+              Wajah atau bahu belum terlihat jelas. Duduk menghadap kamera di tempat terang agar kepala hingga kedua bahu masuk ke layar.
+            </p>
+          `;
+          return;
+        }
+
+        if (!issues || issues.length === 0) {
+          el.issueCountBadge.className = "text-[11px] font-semibold text-emerald-700";
+          el.issueCountBadge.textContent = "Postur bagus";
+          el.diagnosisList.innerHTML = `
+            <div class="border-l-2 border-emerald-500 pl-3">
+              <p class="text-xs font-semibold text-[#192641]">Posisi duduk Anda sudah bagus</p>
+              <p class="mt-1 text-xs leading-relaxed text-[#596779]">
+                Bahu sejajar, kepala tegak, dan jarak ke layar sudah aman. Istirahatkan mata 20 detik setiap 20 menit.
+              </p>
+            </div>
+          `;
+          return;
+        }
+
+        el.issueCountBadge.className =
+          status === "poor"
+            ? "text-[11px] font-semibold text-rose-600"
+            : "text-[11px] font-semibold text-amber-600";
+        el.issueCountBadge.textContent = `${issues.length} hal perlu diperbaiki`;
+
+        el.diagnosisList.innerHTML = issues
+          .map((item) => {
+            const borderTone = item.severity === "high" ? "border-rose-500" : "border-amber-500";
+            return `
+              <div class="border-l-2 ${borderTone} pl-3">
+                <p class="text-xs font-semibold text-[#192641]">${escapeHtml(item.title)}</p>
+                <p class="mt-0.5 text-xs text-[#596779]">${escapeHtml(item.detail)}</p>
+                ${
+                  item.recommendation
+                    ? `<p class="mt-1 text-[11px] font-medium text-[#192641]">Saran: ${escapeHtml(item.recommendation)}</p>`
+                    : ""
+                }
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      // =======================================================================
+      // 60+ FPS Smooth Canvas Skeleton Renderer
+      // =======================================================================
+      const STATUS_HEX = {
+        ideal: "#10B981",
+        warning: "#F59E0B",
+        poor: "#F43F5E",
+      };
+
+      function lerpPoint(curr, target, alpha) {
+        if (!target) return null;
+        if (!curr) return [target[0], target[1]];
+        return [
+          curr[0] + (target[0] - curr[0]) * alpha,
+          curr[1] + (target[1] - curr[1]) * alpha,
+        ];
+      }
+
+      function drawJointNode(ctx, x, y, fillHex, radius) {
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 3, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(25, 38, 65, 0.85)";
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 1.2, 0, Math.PI * 2);
+        ctx.fillStyle = "#F8F9FA";
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(2, radius - 0.8), 0, Math.PI * 2);
+        ctx.fillStyle = fillHex;
+        ctx.fill();
+      }
+
+      function renderOverlayFrame(now) {
+        if (!state.isRunning) return;
+        state.rafId = requestAnimationFrame(renderOverlayFrame);
+
+        state.renderTimestamps.push(now);
+        while (state.renderTimestamps.length > 0 && now - state.renderTimestamps[0] > 1000) {
+          state.renderTimestamps.shift();
+        }
+        while (state.aiTimestamps.length > 0 && now - state.aiTimestamps[0] > 2000) {
+          state.aiTimestamps.shift();
+        }
+        el.fpsCounter.textContent = `${state.renderTimestamps.length} FPS`;
+
+        const dtSec = state.lastRenderTs ? Math.min((now - state.lastRenderTs) / 1000, 0.1) : 0.016;
+        state.lastRenderTs = now;
+
+        const rect = el.overlayCanvas.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const targetW = Math.round(rect.width * dpr);
+        const targetH = Math.round(rect.height * dpr);
+        if (el.overlayCanvas.width !== targetW || el.overlayCanvas.height !== targetH) {
+          el.overlayCanvas.width = targetW;
+          el.overlayCanvas.height = targetH;
+        }
+
+        const ctx = el.overlayCanvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+
+        if (!state.targetPose || !el.video.videoWidth || !el.video.videoHeight) {
+          state.smoothPose = null;
+          return;
+        }
+
+        const alpha = 1 - Math.exp(-18 * dtSec);
+        const t = state.targetPose;
+        const prev = state.smoothPose;
+        state.smoothPose = {
+          nose: lerpPoint(prev?.nose, t.nose, alpha),
+          left_shoulder: lerpPoint(prev?.left_shoulder, t.left_shoulder, alpha),
+          right_shoulder: lerpPoint(prev?.right_shoulder, t.right_shoulder, alpha),
+          mid_shoulder: lerpPoint(prev?.mid_shoulder, t.mid_shoulder, alpha),
+          left_eye: lerpPoint(prev?.left_eye, t.left_eye, alpha),
+          right_eye: lerpPoint(prev?.right_eye, t.right_eye, alpha),
+          flags: t.flags || {},
+        };
+
+        const cw = rect.width;
+        const ch = rect.height;
+        const videoRatio = el.video.videoWidth / el.video.videoHeight;
+        const containerRatio = cw / ch;
+        let renderW, renderH, offsetX, offsetY;
+        if (videoRatio > containerRatio) {
+          renderH = ch;
+          renderW = ch * videoRatio;
+          offsetX = (cw - renderW) / 2;
+          offsetY = 0;
+        } else {
+          renderW = cw;
+          renderH = cw / videoRatio;
+          offsetX = 0;
+          offsetY = (ch - renderH) / 2;
+        }
+
+        const mapPt = (pt) => [offsetX + pt[0] * renderW, offsetY + pt[1] * renderH];
+        const p = state.smoothPose;
+        const [nx, ny] = mapPt(p.nose);
+        const [lsx, lsy] = mapPt(p.left_shoulder);
+        const [rsx, rsy] = mapPt(p.right_shoulder);
+        const [msx, msy] = mapPt(p.mid_shoulder);
+
+        const statusHex = STATUS_HEX[state.poseStatus] || "#A1BDD0";
+        const shoulderHex = p.flags.shoulder_tilted ? "#F59E0B" : "#A1BDD0";
+        const neckHex = p.flags.tech_neck ? "#F43F5E" : "#D2E0EE";
+        const eyeHex = p.flags.too_close ? "#F43F5E" : "#A1BDD0";
+
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // Subtle horizontal guide through shoulder midpoint
+        const halfRef = Math.max(48, Math.abs(lsx - rsx) * 0.56);
+        ctx.save();
+        ctx.setLineDash([6, 6]);
+        ctx.strokeStyle = "rgba(248, 249, 250, 0.42)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(msx - halfRef, msy);
+        ctx.lineTo(msx + halfRef, msy);
+        ctx.stroke();
+        ctx.restore();
+
+        // Subtle dark contrast backing
+        ctx.strokeStyle = "rgba(25, 38, 65, 0.5)";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(lsx, lsy);
+        ctx.lineTo(rsx, rsy);
+        ctx.moveTo(msx, msy);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+
+        // Shoulder & neck lines
+        ctx.strokeStyle = shoulderHex;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(lsx, lsy);
+        ctx.lineTo(rsx, rsy);
+        ctx.stroke();
+
+        ctx.strokeStyle = neckHex;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(msx, msy);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+
+        // Eye line
+        if (p.left_eye && p.right_eye) {
+          const [lex, ley] = mapPt(p.left_eye);
+          const [rex, rey] = mapPt(p.right_eye);
+          ctx.strokeStyle = "rgba(25, 38, 65, 0.45)";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(lex, ley);
+          ctx.lineTo(rex, rey);
+          ctx.stroke();
+
+          ctx.strokeStyle = eyeHex;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(lex, ley);
+          ctx.lineTo(rex, rey);
+          ctx.stroke();
+
+          drawJointNode(ctx, lex, ley, eyeHex, 3.6);
+          drawJointNode(ctx, rex, rey, eyeHex, 3.6);
+        }
+
+        drawJointNode(ctx, lsx, lsy, shoulderHex, 5);
+        drawJointNode(ctx, rsx, rsy, shoulderHex, 5);
+        drawJointNode(ctx, msx, msy, statusHex, 4.4);
+        drawJointNode(ctx, nx, ny, statusHex, 5.2);
+      }
+
+      function applyAnalysisResult(data) {
+        const now = performance.now();
+        state.aiTimestamps.push(now);
+
+        const dt = state.lastTickTs ? Math.min(now - state.lastTickTs, 1000) : 0;
+        state.lastTickTs = now;
+
+        if (!data.detected) {
+          state.targetPose = null;
+          state.lastMetrics = null;
+          state.badPostureStartTs = null;
+          state.chimePlayedForEpisode = false;
+
+          el.scoreValue.textContent = "--";
+          el.statusLabel.textContent = data.status_label || "Wajah/Bahu Belum Terlihat";
+          el.statusDot.className = "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]";
+          el.scoreProgressBar.style.width = "0%";
+          el.scoreProgressBar.className = "smooth-bar h-full rounded-full bg-[#A1BDD0]";
+
+          el.metricShoulder.textContent = "--°";
+          el.subShoulder.textContent = "Batas ≤ 6.5°";
+          setDotTone(el.dotShoulder, "neutral");
+          el.metricNeckStatus.textContent = "--";
+          el.metricNeckSub.textContent = "Belum terbaca";
+          setDotTone(el.dotNeck, "neutral");
+          el.metricDistanceStatus.textContent = "--";
+          el.metricDistanceSub.textContent = "Belum terbaca";
+          setDotTone(el.dotDistance, "neutral");
+
+          showFloatingAlert(
+            true,
+            "info",
+            "Wajah atau Bahu Belum Terlihat",
+            data.message || "Arahkan wajah dan kedua bahu Anda ke depan kamera."
+          );
+          renderDiagnosis(false, "undetected", data.issues || []);
+          return;
+        }
+
+        state.targetPose = data.keypoints || null;
+        state.poseStatus = data.status || "ideal";
+        state.lastMetrics = data.metrics;
+
+        const score = Number(data.score ?? 0);
+        el.scoreValue.textContent = String(score);
+        el.statusLabel.textContent = data.status_label || "Postur Bagus & Sehat";
+        el.scoreProgressBar.style.width = `${score}%`;
+
+        if (!state.sessionStartedAt) state.sessionStartedAt = new Date();
+        state.samplesCount += 1;
+        state.scoreSum += score;
+        state.minScore = state.minScore === null ? score : Math.min(state.minScore, score);
+        state.maxScore = state.maxScore === null ? score : Math.max(state.maxScore, score);
+        state.tiltSum += Number(data.metrics.shoulder_tilt || 0);
+
+        if (data.status === "ideal") {
+          el.statusDot.className = "h-1.5 w-1.5 rounded-full bg-emerald-400";
+          el.scoreProgressBar.className = "smooth-bar h-full rounded-full bg-emerald-400";
+        } else if (data.status === "warning") {
+          el.statusDot.className = "h-1.5 w-1.5 rounded-full bg-amber-400";
+          el.scoreProgressBar.className = "smooth-bar h-full rounded-full bg-amber-400";
+        } else {
+          el.statusDot.className = "h-1.5 w-1.5 rounded-full bg-rose-400";
+          el.scoreProgressBar.className = "smooth-bar h-full rounded-full bg-rose-400";
+        }
+
+        const m = data.metrics;
+        const tilted = m.shoulder_tilt > 6.5;
+        el.metricShoulder.textContent = `${Number(m.shoulder_tilt).toFixed(1)}°`;
+        el.subShoulder.textContent = tilted ? "Posisi bahu miring" : "Bahu sejajar";
+        setDotTone(el.dotShoulder, tilted ? "warning" : "ideal");
+
+        const isNeckRisk = m.neck_status === "Menunduk" || m.neck_status === "Tech Neck";
+        const isNeckWarn = m.neck_status === "Agak Menunduk" || m.neck_status === "Mulai Menunduk";
+        el.metricNeckStatus.textContent = m.neck_status || "Tegak";
+        el.metricNeckSub.textContent = isNeckRisk
+          ? "Kepala menunduk"
+          : isNeckWarn
+            ? "Sedikit menunduk"
+            : "Kepala lurus";
+        setDotTone(el.dotNeck, isNeckRisk ? "poor" : isNeckWarn ? "warning" : "ideal");
+
+        const isTooClose = m.distance_status === "Terlalu Dekat";
+        const isSlightlyClose = m.distance_status === "Agak Dekat";
+        el.metricDistanceStatus.textContent = m.distance_status || "Aman";
+        el.metricDistanceSub.textContent = isTooClose
+          ? "Mundur sedikit"
+          : isSlightlyClose
+            ? "Agak dekat"
+            : "Aman untuk mata";
+        setDotTone(el.dotDistance, isTooClose ? "poor" : isSlightlyClose ? "warning" : "ideal");
+
+        if (data.status === "ideal") {
+          state.healthyMs += dt;
+        } else {
+          state.poorMs += dt;
+        }
+        if (Array.isArray(data.issues)) {
+          data.issues.forEach((iss) => {
+            if (iss && Object.prototype.hasOwnProperty.call(state.issueDurationMs, iss.type)) {
+              state.issueDurationMs[iss.type] += dt;
+            }
+          });
+        }
+        updateTimersUI();
+
+        // Sample score trend history (every 3s + immediate first point)
+        if (state.scoreHistory.length === 0 || now - state.lastTrendSampleTs >= TREND_SAMPLE_MS) {
+          state.lastTrendSampleTs = now;
+          const elapsedSec = Math.round((state.healthyMs + state.poorMs) / 1000);
+          state.scoreHistory.push({ elapsedSec, score });
+          if (state.scoreHistory.length > MAX_TREND_POINTS) {
+            // Smooth 2x downsampling to preserve full session shape
+            state.scoreHistory = state.scoreHistory.filter((_, i) => i % 2 === 0 || i === state.scoreHistory.length - 1);
+          }
+          const avgNow = Math.round(state.scoreSum / Math.max(1, state.samplesCount));
+          el.trendAvgLabel.textContent = `Rata-rata: ${avgNow}`;
+          renderTrendChart(el.liveTrendSvg, state.scoreHistory, false);
+        }
+
+        const isBadPosture = data.status === "poor" || data.status === "warning";
+        if (isBadPosture) {
+          if (state.badPostureStartTs === null) state.badPostureStartTs = now;
+          const holdMs = now - state.badPostureStartTs;
+
+          const primaryIssue = (data.issues && data.issues[0]) || null;
+
+          if (holdMs >= CHIME_HOLD_MS && !state.chimePlayedForEpisode) {
+            state.chimePlayedForEpisode = true;
+            playAmbientChime();
+            sendDesktopNotification(
+              "ErgoVision — Perbaiki Posisi Duduk",
+              primaryIssue
+                ? `${primaryIssue.title}. ${primaryIssue.recommendation || primaryIssue.detail}`
+                : "Posisi duduk Anda kurang baik. Tegakkan punggung dan jaga jarak layar."
+            );
+          }
+
+          showFloatingAlert(
+            true,
+            data.status === "poor" ? "poor" : "warning",
+            primaryIssue ? primaryIssue.title : data.status_label,
+            primaryIssue ? primaryIssue.recommendation || primaryIssue.detail : "Tegakkan punggung dan jaga jarak layar.",
+            holdMs
+          );
+        } else {
+          state.badPostureStartTs = null;
+          state.chimePlayedForEpisode = false;
+          showFloatingAlert(false);
+        }
+
+        renderDiagnosis(true, data.status, data.issues || []);
+      }
+
+      // =======================================================================
+      // In-Browser MediaPipe Pose Landmarker & Ergonomic Scoring Engine
+      // =======================================================================
+      async function loadPoseEngine() {
+        if (state.poseLandmarker) return state.poseLandmarker;
+        if (state.modelPromise) return state.modelPromise;
+
+        state.modelPromise = (async () => {
+          const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
+          try {
+            state.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath: MEDIAPIPE_MODEL_URL,
+                delegate: "GPU",
+              },
+              runningMode: "VIDEO",
+              numPoses: 1,
+              minPoseDetectionConfidence: 0.4,
+              minPosePresenceConfidence: 0.4,
+              minTrackingConfidence: 0.4,
+            });
+          } catch (_) {
+            state.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+              baseOptions: {
+                modelAssetPath: MEDIAPIPE_MODEL_URL,
+                delegate: "CPU",
+              },
+              runningMode: "VIDEO",
+              numPoses: 1,
+              minPoseDetectionConfidence: 0.4,
+              minPosePresenceConfidence: 0.4,
+              minTrackingConfidence: 0.4,
+            });
+          }
+          return state.poseLandmarker;
+        })();
+
+        return state.modelPromise;
+      }
+
+      function evaluateLandmarks(landmarks, frameW, frameH) {
+        if (!landmarks || landmarks.length < 13) {
+          return {
+            detected: false,
+            keypoints: null,
+            score: null,
+            status: "undetected",
+            status_label: "Wajah/Bahu Belum Terlihat",
+            message: "Arahkan wajah dan kedua bahu Anda ke depan kamera di tempat yang cukup terang.",
+            metrics: null,
+            issues: [],
+          };
+        }
+
+        // MediaPipe 33-landmark indices: 0=nose, 2=left_eye, 5=right_eye, 11=left_shoulder, 12=right_shoulder
+        const lmNose = landmarks[0];
+        const lmLeftEye = landmarks[2];
+        const lmRightEye = landmarks[5];
+        const lmLeftShoulder = landmarks[11];
+        const lmRightShoulder = landmarks[12];
+
+        const vis = (lm) => (typeof lm?.visibility === "number" ? lm.visibility : 1.0);
+        if (
+          vis(lmNose) < LANDMARK_VIS_THRESHOLD ||
+          vis(lmLeftShoulder) < LANDMARK_VIS_THRESHOLD ||
+          vis(lmRightShoulder) < LANDMARK_VIS_THRESHOLD
+        ) {
+          return {
+            detected: false,
+            keypoints: null,
+            score: null,
+            status: "undetected",
+            status_label: "Wajah/Bahu Belum Terlihat",
+            message: "Arahkan wajah dan kedua bahu Anda ke depan kamera di tempat yang cukup terang.",
+            metrics: null,
+            issues: [],
+          };
+        }
+
+        const nosePx = [lmNose.x * frameW, lmNose.y * frameH];
+        const lsPx = [lmLeftShoulder.x * frameW, lmLeftShoulder.y * frameH];
+        const rsPx = [lmRightShoulder.x * frameW, lmRightShoulder.y * frameH];
+
+        const dxS = lsPx[0] - rsPx[0];
+        const dyS = lsPx[1] - rsPx[1];
+        const shoulderWidth = Math.hypot(dxS, dyS);
+
+        if (shoulderWidth < 12) {
+          return {
+            detected: false,
+            keypoints: null,
+            score: null,
+            status: "undetected",
+            status_label: "Wajah/Bahu Belum Terlihat",
+            message: "Arahkan wajah dan kedua bahu Anda ke depan kamera di tempat yang cukup terang.",
+            metrics: null,
+            issues: [],
+          };
+        }
+
+        // 1. Shoulder Tilt (degrees)
+        const shoulderTilt = Math.abs(
+          (Math.atan2(Math.abs(dyS), Math.max(Math.abs(dxS), 1e-6)) * 180) / Math.PI
+        );
+        const shoulderTilted = shoulderTilt > IDEAL_SHOULDER_TILT_MAX;
+
+        // 2. Tech Neck / Slouching (Neck Ratio)
+        const midShoulderPx = [(lsPx[0] + rsPx[0]) / 2, (lsPx[1] + rsPx[1]) / 2];
+        const verticalNeck = Math.max(midShoulderPx[1] - nosePx[1], 0);
+        const neckRatio = verticalNeck / shoulderWidth;
+        const targetNeck = state.baselineNeck ?? DEFAULT_NECK;
+        const neckDrop = Math.max(0, (targetNeck - neckRatio) / Math.max(targetNeck, 1e-6));
+        const techNeck = neckDrop > NECK_DROP_THRESHOLD;
+        const neckStatus = techNeck ? "Menunduk" : neckDrop > 0.10 ? "Agak Menunduk" : "Tegak";
+
+        // 3. Eye-Strain Proximity (Face Ratio)
+        const eyesOk =
+          vis(lmLeftEye) >= LANDMARK_VIS_THRESHOLD && vis(lmRightEye) >= LANDMARK_VIS_THRESHOLD;
+        let faceRatio;
+        if (eyesOk) {
+          const lePx = [lmLeftEye.x * frameW, lmLeftEye.y * frameH];
+          const rePx = [lmRightEye.x * frameW, lmRightEye.y * frameH];
+          const eyeDist = Math.hypot(rePx[0] - lePx[0], rePx[1] - lePx[1]);
+          faceRatio = eyeDist / Math.max(frameW, 1);
+        } else {
+          faceRatio = (shoulderWidth * SHOULDER_TO_EYE_SCALE) / Math.max(frameW, 1);
+        }
+        const targetFace = state.baselineFace ?? DEFAULT_FACE;
+        const faceIncrease = Math.max(0, (faceRatio - targetFace) / Math.max(targetFace, 1e-6));
+        const tooClose = faceIncrease > FACE_INCREASE_THRESHOLD;
+        const distanceStatus = tooClose ? "Terlalu Dekat" : faceIncrease > 0.12 ? "Agak Dekat" : "Aman";
+
+        // 4. Ergonomic Score (0 - 100)
+        const tiltPenalty =
+          shoulderTilt <= IDEAL_SHOULDER_TILT_MAX
+            ? Math.max(0, (shoulderTilt - 4.5) * 1.5)
+            : 15 + Math.min(25, (shoulderTilt - IDEAL_SHOULDER_TILT_MAX) * 2.5);
+
+        const neckPenalty =
+          neckDrop <= NECK_DROP_THRESHOLD
+            ? Math.max(0, (neckDrop - 0.08) * 50)
+            : 21 + Math.min(29, (neckDrop - NECK_DROP_THRESHOLD) * 110);
+
+        const facePenalty =
+          faceIncrease <= FACE_INCREASE_THRESHOLD
+            ? Math.max(0, (faceIncrease - 0.12) * 35)
+            : 18 + Math.min(27, (faceIncrease - FACE_INCREASE_THRESHOLD) * 75);
+
+        const score = Math.round(Math.max(0, Math.min(100, 100 - (tiltPenalty + neckPenalty + facePenalty))));
+        const status = score >= 80 ? "ideal" : score >= 55 ? "warning" : "poor";
+        const statusLabel =
+          score >= 80
+            ? "Postur Bagus & Sehat"
+            : score >= 55
+              ? "Perlu Diperbaiki Sedikit"
+              : "Postur Kurang Baik";
+
+        // 5. Issues & Recommendations
+        const issues = [];
+        if (techNeck) {
+          issues.push({
+            type: "tech_neck",
+            severity: neckDrop > 0.30 ? "high" : "medium",
+            title: "Kepala & Leher Terlalu Menunduk",
+            detail: `Posisi kepala turun ${Math.round(neckDrop * 100)}% dari posisi duduk tegak Anda.`,
+            recommendation: "Tegakkan punggung, tarik dagu sedikit ke belakang, dan sejajarkan layar dengan pandangan mata.",
+          });
+        }
+        if (tooClose) {
+          issues.push({
+            type: "eye_strain",
+            severity: faceIncrease > 0.42 ? "high" : "medium",
+            title: "Wajah Terlalu Dekat ke Layar",
+            detail: `Wajah Anda ${Math.round(faceIncrease * 100)}% lebih dekat dari jarak aman ke layar.`,
+            recommendation: "Mundurkan posisi duduk sekitar 50–70 cm (sepanjang lengan) agar mata tidak cepat lelah.",
+          });
+        }
+        if (shoulderTilted) {
+          issues.push({
+            type: "shoulder_tilt",
+            severity: shoulderTilt > 12 ? "high" : "medium",
+            title: "Posisi Bahu Miring",
+            detail: `Bahu Anda miring ${shoulderTilt.toFixed(1)}° (batas ideal maksimal ${IDEAL_SHOULDER_TILT_MAX}°).`,
+            recommendation: "Sejajarkan kedua bahu dengan santai dan hindari bersandar hanya di satu sisi.",
+          });
+        }
+
+        return {
+          detected: true,
+          keypoints: {
+            nose: [lmNose.x, lmNose.y],
+            left_shoulder: [lmLeftShoulder.x, lmLeftShoulder.y],
+            right_shoulder: [lmRightShoulder.x, lmRightShoulder.y],
+            mid_shoulder: [(lmLeftShoulder.x + lmRightShoulder.x) / 2, (lmLeftShoulder.y + lmRightShoulder.y) / 2],
+            left_eye: eyesOk ? [lmLeftEye.x, lmLeftEye.y] : null,
+            right_eye: eyesOk ? [lmRightEye.x, lmRightEye.y] : null,
+            flags: {
+              shoulder_tilted: shoulderTilted,
+              tech_neck: techNeck,
+              too_close: tooClose,
+            },
+          },
+          score,
+          status,
+          status_label: statusLabel,
+          metrics: {
+            shoulder_tilt: Number(shoulderTilt.toFixed(1)),
+            neck_ratio: Number(neckRatio.toFixed(3)),
+            face_ratio: Number(faceRatio.toFixed(3)),
+            neck_status: neckStatus,
+            distance_status: distanceStatus,
+            shoulder_status: shoulderTilted ? "Miring" : "Sejajar",
+          },
+          issues,
+        };
+      }
+
+      async function runClientAiLoop() {
+        if (!state.isRunning) return;
+
+        const now = performance.now();
+        if (
+          state.poseLandmarker &&
+          el.video.readyState >= 2 &&
+          el.video.videoWidth > 0 &&
+          el.video.currentTime !== state.lastVideoTime &&
+          now - state.lastAiRunTs >= AI_INTERVAL_MS
+        ) {
+          state.lastVideoTime = el.video.currentTime;
+          state.lastAiRunTs = now;
+          try {
+            const res = state.poseLandmarker.detectForVideo(el.video, Math.round(now));
+            const landmarks = res?.landmarks?.[0] || null;
+            const payload = evaluateLandmarks(landmarks, el.video.videoWidth, el.video.videoHeight);
+            if (state.isRunning) applyAnalysisResult(payload);
+          } catch (err) {
+            console.warn("Inferensi pose browser gagal:", err);
+          }
+        }
+
+        if (state.isRunning) {
+          state.loopTimer = setTimeout(runClientAiLoop, AI_INTERVAL_MS);
+        }
+      }
+
+      async function startCamera() {
+        showCameraError("");
+        ensureAudioContext();
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showCameraError("Browser tidak mendukung kamera atau halaman tidak dibuka lewat HTTPS / localhost.");
+          return;
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 60, min: 30 },
+              facingMode: "user",
+            },
+            audio: false,
+          });
+
+          state.stream = stream;
+          state.isRunning = true;
+          state.lastTickTs = performance.now();
+          state.lastRenderTs = null;
+          state.lastVideoTime = -1;
+          state.lastAiRunTs = 0;
+          state.targetPose = null;
+          state.smoothPose = null;
+          state.renderTimestamps = [];
+          state.aiTimestamps = [];
+
+          el.video.srcObject = stream;
+          await el.video.play();
+
+          el.idleOverlay.classList.add("hidden");
+          el.video.classList.remove("hidden");
+          el.overlayCanvas.classList.remove("hidden");
+
+          el.btnCameraLabel.textContent = "Matikan Kamera";
+          el.iconCameraStart.classList.add("hidden");
+          el.iconCameraStop.classList.remove("hidden");
+          el.headerLiveDot.className = "h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse-calm";
+          el.headerLiveText.textContent = "Sedang memantau";
+          el.viewportLiveBadge.classList.remove("hidden");
+          el.viewportLiveBadge.classList.add("flex");
+          el.calibrationBadge.classList.remove("hidden");
+          el.calibrationBadge.classList.add("flex");
+
+          state.rafId = requestAnimationFrame(renderOverlayFrame);
+          startEyeTimerLoop();
+          updateEyeTimerUI();
+
+          if (!state.poseLandmarker) {
+            el.statusLabel.textContent = "Memuat model AI...";
+            await loadPoseEngine();
+          }
+          if (state.isRunning) {
+            runClientAiLoop();
+          }
+        } catch (err) {
+          let message = "Tidak dapat mengakses kamera. Periksa izin kamera pada browser Anda.";
+          if (err.name === "NotAllowedError") {
+            message = "Izin kamera ditolak. Izinkan akses kamera di browser lalu coba lagi.";
+          } else if (err.name === "NotFoundError") {
+            message = "Kamera tidak ditemukan pada perangkat ini.";
+          }
+          showCameraError(message);
+        }
+      }
+
+      function stopCamera() {
+        state.isRunning = false;
+        if (state.loopTimer) { clearTimeout(state.loopTimer); state.loopTimer = null; }
+        if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
+        if (state.stream) { state.stream.getTracks().forEach((t) => t.stop()); state.stream = null; }
+
+        el.video.srcObject = null;
+        el.video.classList.add("hidden");
+        el.overlayCanvas.classList.add("hidden");
+        const octx = el.overlayCanvas.getContext("2d");
+        if (octx) octx.clearRect(0, 0, el.overlayCanvas.width, el.overlayCanvas.height);
+        el.idleOverlay.classList.remove("hidden");
+
+        state.targetPose = null;
+        state.smoothPose = null;
+        state.lastMetrics = null;
+        state.lastTickTs = null;
+        state.badPostureStartTs = null;
+        state.chimePlayedForEpisode = false;
+
+        el.btnCameraLabel.textContent = "Nyalakan Kamera";
+        el.iconCameraStart.classList.remove("hidden");
+        el.iconCameraStop.classList.add("hidden");
+        el.headerLiveDot.className = "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]";
+        el.headerLiveText.textContent = "Kamera nonaktif";
+        el.viewportLiveBadge.classList.add("hidden");
+        el.viewportLiveBadge.classList.remove("flex");
+        el.calibrationBadge.classList.add("hidden");
+        el.calibrationBadge.classList.remove("flex");
+        showFloatingAlert(false);
+
+        el.scoreValue.textContent = "--";
+        el.statusLabel.textContent = "Kamera Dimatikan";
+        el.statusDot.className = "h-1.5 w-1.5 rounded-full bg-[#A1BDD0]";
+        el.scoreProgressBar.style.width = "0%";
+        el.scoreProgressBar.className = "smooth-bar h-full rounded-full bg-[#A1BDD0]";
+        updateEyeTimerUI();
+      }
+
+      // =======================================================================
+      // PDF Report Generation
+      // =======================================================================
+      function buildPdfReportData() {
+        const now = new Date();
+        const totalMs = state.healthyMs + state.poorMs;
+        const healthyPct = totalMs > 0 ? Math.round((state.healthyMs / totalMs) * 100) : 0;
+        const poorPct = totalMs > 0 ? 100 - healthyPct : 0;
+        const avgScore = state.samplesCount > 0 ? Math.round(state.scoreSum / state.samplesCount) : null;
+        const avgTilt = state.samplesCount > 0 ? (state.tiltSum / state.samplesCount).toFixed(1) : null;
+        const isPersonal = state.baselineNeck !== null && state.baselineFace !== null;
+
+        let verdict = "Belum ada data sesi";
+        let verdictTone = "text-[#596779]";
+        let summary =
+          "Belum ada data pemantauan pada sesi ini. Nyalakan kamera beberapa saat agar ErgoVision dapat menyusun laporan postur duduk Anda.";
+
+        if (avgScore !== null) {
+          if (avgScore >= 80 && healthyPct >= 75) {
+            verdict = "Sangat Baik";
+            verdictTone = "text-emerald-700";
+            summary = `Selama ${formatDuration(totalMs)}, rata-rata nilai postur duduk Anda mencapai ${avgScore}/100 dengan ${healthyPct}% waktu duduk dalam posisi sehat. Pertahankan kebiasaan duduk tegak ini dan tetap istirahatkan mata secara berkala.`;
+          } else if (avgScore >= 60) {
+            verdict = "Cukup Baik";
+            verdictTone = "text-amber-700";
+            summary = `Selama ${formatDuration(totalMs)}, rata-rata nilai postur Anda adalah ${avgScore}/100 (${healthyPct}% duduk sehat). Masih terdapat beberapa momen membungkuk atau terlalu dekat ke layar yang sebaiknya diperbaiki.`;
+          } else {
+            verdict = "Perlu Perhatian";
+            verdictTone = "text-rose-700";
+            summary = `Selama ${formatDuration(totalMs)}, rata-rata nilai postur Anda tercatat ${avgScore}/100 dengan ${poorPct}% waktu di posisi kurang baik. Sesuaikan tinggi layar, posisi kursi, dan jarak pandang agar leher serta mata tetap nyaman.`;
+          }
+        }
+
+        const dateStr = now.toLocaleString("id-ID", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        const aspects = [
+          {
+            name: "Kepala & Leher Menunduk",
+            ms: state.issueDurationMs.tech_neck,
+            tip: "Sejajarkan bagian atas layar dengan mata dan jaga punggung tetap tegak.",
+          },
+          {
+            name: "Wajah Terlalu Dekat ke Layar",
+            ms: state.issueDurationMs.eye_strain,
+            tip: "Pertahankan jarak duduk sekitar 50–70 cm (sepanjang lengan) dari layar.",
+          },
+          {
+            name: "Posisi Bahu Miring",
+            ms: state.issueDurationMs.shoulder_tilt,
+            tip: "Rilekskan kedua bahu secara seimbang dan hindari bersandar di satu sisi saja.",
+          },
+        ];
+
+        const recs = [];
+        aspects
+          .filter((a) => a.ms >= 2000)
+          .sort((a, b) => b.ms - a.ms)
+          .forEach((a) => recs.push(`${a.name} (${formatDuration(a.ms)}): ${a.tip}`));
+
+        if (recs.length === 0) {
+          recs.push("Pertahankan posisi duduk tegak dengan kedua bahu rileks dan sejajar.");
+          recs.push("Gunakan tombol 'Simpan Posisi Tegak Saya' di awal sesi agar penilaian sesuai tubuh Anda.");
+        }
+        recs.push(`Istirahatkan mata secara rutin setiap ${state.eyeWorkMinutes} menit selama ${state.eyeRestSeconds} detik dengan melihat objek jauh agar otot mata rileks.`);
+
+        return { dateStr, totalMs, healthyPct, poorPct, avgScore, avgTilt, isPersonal, verdict, verdictTone, summary, aspects, recs };
+      }
+
+      function populatePdfReport() {
+        const d = buildPdfReportData();
+        const userName = (el.pdfUserNameInput.value || "").trim() || "Pengguna ErgoVision";
+        const note = (el.pdfNoteInput.value || "").trim();
+
+        el.modalPreviewTimestamp.textContent = `${d.dateStr} · Total ${formatDuration(d.totalMs)}`;
+        el.modalPreviewVerdict.className = `text-xs font-bold ${d.verdictTone}`;
+        el.modalPreviewVerdict.textContent = d.verdict;
+        el.modalAvgScore.textContent = d.avgScore !== null ? `${d.avgScore}/100` : "--";
+        el.modalHealthyTime.textContent = formatDuration(state.healthyMs);
+        el.modalPoorTime.textContent = formatDuration(state.poorMs);
+        el.modalHealthyPct.textContent = `${d.healthyPct}%`;
+
+        el.pdfDateText.textContent = d.dateStr;
+        el.pdfModeText.textContent = d.isPersonal ? "Patokan Pribadi Aktif" : "Patokan Standar";
+        el.pdfUserName.textContent = userName;
+        if (note) {
+          el.pdfNoteRow.classList.remove("hidden");
+          el.pdfNoteText.textContent = note;
+        } else {
+          el.pdfNoteRow.classList.add("hidden");
+        }
+        el.pdfTotalDuration.textContent = formatDuration(d.totalMs);
+        el.pdfEyeBreaks.textContent = `${state.eyeBreaksCompleted}×`;
+        el.pdfAvgScore.textContent = d.avgScore !== null ? `${d.avgScore}/100` : "--";
+        el.pdfScoreRange.textContent =
+          state.minScore !== null ? `Terendah ${state.minScore} · Tertinggi ${state.maxScore}` : "Belum ada sampel";
+        el.pdfHealthyDuration.textContent = formatDuration(state.healthyMs);
+        el.pdfHealthyPct.textContent = `${d.healthyPct}% dari total sesi`;
+        el.pdfPoorDuration.textContent = formatDuration(state.poorMs);
+        el.pdfPoorPct.textContent = `${d.poorPct}% dari total sesi`;
+        el.pdfAvgTilt.textContent = d.avgTilt !== null ? `${d.avgTilt}°` : "--°";
+        el.pdfVerdictBadge.textContent = d.verdict;
+        el.pdfSummaryParagraph.textContent = d.summary;
+        renderTrendChart(el.pdfTrendSvg, state.scoreHistory, true);
+
+        el.pdfBreakdownRows.innerHTML = d.aspects
+          .map((a) => {
+            const hasIssue = a.ms >= 2000;
+            const statusText = hasIssue ? "Perlu Perhatian" : "Aman";
+            const statusCls = hasIssue ? "text-amber-700" : "text-emerald-700";
+            return `
+              <tr>
+                <td class="px-4 py-2.5 font-semibold text-[#192641]">${escapeHtml(a.name)}</td>
+                <td class="tnum px-4 py-2.5 font-medium text-[#192641]">${formatDuration(a.ms)}</td>
+                <td class="px-4 py-2.5 font-semibold ${statusCls}">${statusText}</td>
+                <td class="px-4 py-2.5 text-[#596779]">${escapeHtml(hasIssue ? a.tip : "Terpantau baik selama sesi.")}</td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        el.pdfRecommendationList.innerHTML = d.recs.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+      }
+
+      function openPdfModal() {
+        populatePdfReport();
+        el.pdfPreviewModal.classList.remove("hidden");
+        el.pdfPreviewModal.classList.add("flex");
+      }
+
+      function closePdfModal() {
+        el.pdfPreviewModal.classList.add("hidden");
+        el.pdfPreviewModal.classList.remove("flex");
+      }
+
+      function printPdfReport() {
+        populatePdfReport();
+        const prevTitle = document.title;
+        const stamp = new Date().toISOString().slice(0, 10);
+        document.title = `Laporan-Postur-ErgoVision-${stamp}`;
+        window.print();
+        setTimeout(() => { document.title = prevTitle; }, 400);
+      }
+
+      // =======================================================================
+      // Event Listeners
+      // =======================================================================
+      el.btnStartOverlay.addEventListener("click", () => startCamera());
+      el.btnCameraToggle.addEventListener("click", () => (state.isRunning ? stopCamera() : startCamera()));
+
+      el.btnCalibrate.addEventListener("click", async () => {
+        if (!state.isRunning) {
+          showToast("Kamera dinyalakan. Duduk tegak lalu klik 'Simpan Posisi Tegak Saya' lagi.");
+          await startCamera();
+          return;
+        }
+        if (!state.lastMetrics) {
+          showToast("Arahkan wajah dan kedua bahu ke kamera terlebih dahulu.");
+          return;
+        }
+        state.baselineNeck = Number(state.lastMetrics.neck_ratio);
+        state.baselineFace = Number(state.lastMetrics.face_ratio);
+        state.badPostureStartTs = null;
+        state.chimePlayedForEpisode = false;
+        saveCalibrationToStorage(state.baselineNeck, state.baselineFace);
+        updateBaselineUI();
+        showToast("Posisi duduk tegak pribadi tersimpan otomatis di browser ini.");
+      });
+
+      el.btnResetCalibration.addEventListener("click", () => {
+        state.baselineNeck = null;
+        state.baselineFace = null;
+        clearCalibrationStorage();
+        updateBaselineUI();
+        showToast("Patokan dikembalikan ke standar.");
+      });
+
+      el.btnToggleNotif.addEventListener("click", () => toggleDesktopNotif());
+
+      el.btnToggleEyeConfig.addEventListener("click", () => {
+        el.eyeConfigPanel.classList.toggle("hidden");
+        if (!el.eyeConfigPanel.classList.contains("hidden")) {
+          el.inputEyeWorkMin.value = String(state.eyeWorkMinutes);
+          el.inputEyeRestSec.value = String(state.eyeRestSeconds);
+        }
+      });
+
+      document.querySelectorAll(".eye-preset-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          el.inputEyeWorkMin.value = btn.getAttribute("data-eye-preset") || "20";
+        });
+      });
+
+      el.btnSaveEyeConfig.addEventListener("click", () => {
+        const workMin = Math.max(1, Math.min(180, Math.round(Number(el.inputEyeWorkMin.value) || DEFAULT_EYE_WORK_MIN)));
+        const restSec = Math.max(5, Math.min(300, Math.round(Number(el.inputEyeRestSec.value) || DEFAULT_EYE_REST_SEC)));
+        state.eyeWorkMinutes = workMin;
+        state.eyeRestSeconds = restSec;
+        state.eyeWorkRemainingMs = workMin * 60 * 1000;
+        state.eyeRestRemainingMs = restSec * 1000;
+        state.eyeTimerPaused = false;
+        el.inputEyeWorkMin.value = String(workMin);
+        el.inputEyeRestSec.value = String(restSec);
+        saveEyeConfigToStorage(workMin, restSec);
+        el.eyeConfigPanel.classList.add("hidden");
+        updateEyeTimerUI();
+        showToast(`Pengingat mata diatur: tiap ${workMin} menit, istirahat ${restSec} detik.`);
+      });
+
+      el.btnPauseEyeTimer.addEventListener("click", () => {
+        if (state.eyeRestActive) return;
+        state.eyeTimerPaused = !state.eyeTimerPaused;
+        if (!state.eyeTimerPaused && state.isRunning) {
+          startEyeTimerLoop();
+        }
+        updateEyeTimerUI();
+        showToast(
+          state.eyeTimerPaused
+            ? "Waktu istirahat mata dihentikan sementara."
+            : "Waktu istirahat mata dilanjutkan."
+        );
+      });
+
+      el.btnResetEyeTimer.addEventListener("click", () => {
+        if (state.eyeRestActive) {
+          finishEyeRest(true);
+          return;
+        }
+        state.eyeTimerPaused = false;
+        state.eyeWorkRemainingMs = state.eyeWorkMinutes * 60 * 1000;
+        if (state.isRunning) startEyeTimerLoop();
+        updateEyeTimerUI();
+        showToast(`Waktu istirahat mata direset ke ${formatDuration(state.eyeWorkRemainingMs)}.`);
+      });
+
+      el.btnSkipEyeBreak.addEventListener("click", () => finishEyeRest(true));
+
+      el.btnToggleAudio.addEventListener("click", () => {
+        state.isMuted = !state.isMuted;
+        el.btnToggleAudio.setAttribute("aria-pressed", String(state.isMuted));
+        if (state.isMuted) {
+          el.audioIconOn.classList.add("hidden");
+          el.audioIconOff.classList.remove("hidden");
+          el.audioLabel.textContent = "Suara Mati";
+          showToast("Pengingat suara dimatikan.");
+        } else {
+          ensureAudioContext();
+          el.audioIconOn.classList.remove("hidden");
+          el.audioIconOff.classList.add("hidden");
+          el.audioLabel.textContent = "Suara Aktif";
+          playAmbientChime();
+          showToast("Pengingat suara aktif.");
+        }
+      });
+
+      el.btnResetTimer.addEventListener("click", () => {
+        state.healthyMs = 0;
+        state.poorMs = 0;
+        state.sessionStartedAt = null;
+        state.samplesCount = 0;
+        state.scoreSum = 0;
+        state.minScore = null;
+        state.maxScore = null;
+        state.tiltSum = 0;
+        state.issueDurationMs = { tech_neck: 0, eye_strain: 0, shoulder_tilt: 0 };
+        state.scoreHistory = [];
+        state.lastTrendSampleTs = 0;
+        state.eyeBreaksCompleted = 0;
+        state.eyeWorkRemainingMs = state.eyeWorkMinutes * 60 * 1000;
+        el.trendAvgLabel.textContent = "Rata-rata: --";
+        renderTrendChart(el.liveTrendSvg, [], false);
+        updateTimersUI();
+        updateEyeTimerUI();
+        showToast("Ringkasan waktu & grafik sesi direset.");
+      });
+
+      el.btnOpenPdfHeader.addEventListener("click", openPdfModal);
+      el.btnClosePdfModal.addEventListener("click", closePdfModal);
+      el.btnCancelPdfModal.addEventListener("click", closePdfModal);
+      el.btnPrintPdfNow.addEventListener("click", printPdfReport);
+      el.pdfPreviewModal.addEventListener("click", (e) => {
+        if (e.target === el.pdfPreviewModal) closePdfModal();
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && !el.pdfPreviewModal.classList.contains("hidden")) closePdfModal();
+      });
+
+      window.addEventListener("beforeunload", () => {
+        if (state.isRunning) stopCamera();
+      });
+
+      loadSavedPreferences();
+      updateBaselineUI();
+      updateNotifUI();
+      updateTimersUI();
+      updateEyeTimerUI();
+      renderTrendChart(el.liveTrendSvg, [], false);
+
+      // =======================================================================
+      // Minimal Preloader Lifecycle
+      // =======================================================================
+      (function initPreloader() {
+        const preloader = document.getElementById("appPreloader");
+        const bar = document.getElementById("preloaderBar");
+        const statusText = document.getElementById("preloaderStatus");
+        if (!preloader) return;
+
+        let dismissed = false;
+        const dismiss = () => {
+          if (dismissed) return;
+          dismissed = true;
+          if (bar) bar.style.width = "100%";
+          if (statusText) statusText.textContent = "Siap";
+          setTimeout(() => {
+            preloader.classList.add("is-hidden");
+            setTimeout(() => preloader.remove(), 500);
+          }, 180);
+        };
+
+        requestAnimationFrame(() => {
+          if (bar) bar.style.width = "50%";
+        });
+
+        const minDisplay = new Promise((resolve) => setTimeout(resolve, 950));
+        const engineWarmup = loadPoseEngine()
+          .then(() => { if (bar) bar.style.width = "85%"; })
+          .catch(() => { if (bar) bar.style.width = "85%"; });
+
+        Promise.all([minDisplay, engineWarmup]).then(dismiss);
+        setTimeout(dismiss, 3200);
+      })();
+    })();
+  </script>
+</body>
+</html>
